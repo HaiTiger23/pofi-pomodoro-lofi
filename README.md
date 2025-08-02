@@ -66,7 +66,8 @@ Pofi là ứng dụng Pomodoro kết hợp với nhạc nền từ YouTube, giú
 6. Xóa công việc đã hoàn thành bằng nút "Xóa đã hoàn thành"
 
 ## Lịch sử phiên bản
-
+### v1.2.2
+- Ẩn devtool
 ### v1.2.1
 - Cải thiện giao diện người dùng
 - Cho phép người dùng xóa lịch sử bài hát 

@@ -1,6 +1,9 @@
 {
   "name": "pofi",
-  "version": "1.2.1",
+  "version": "1.2.2",
+  "description": "Pofi - A music player",
+  "author": "Hai Dev",
+  "license": "MIT",
   "private": true,
   "main": "elect.js",
   "scripts": {
@@ -13,7 +16,7 @@
   "generate-icons": "electron-icon-builder --input=./pofi_logo.png --output=./icons",
   "package": "npm run generate-icons && electron-packager ./ --platform=darwin --arch=x64 --out=package --overwrite=force --icon=./icons/icons/mac/icon.icns",
   "package-win": "npm run generate-icons && electron-packager ./ --platform=win32 --arch=x64 --out=package --overwrite=force",
-  "build:electron": "electron-builder"
+  "build:electron": "vue-cli-service build && electron-builder"
 }
 ,
   "dependencies": {

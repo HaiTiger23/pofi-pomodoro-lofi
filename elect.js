@@ -40,16 +40,16 @@ async function startServer() {
 
   // Kiểm tra xem thư mục dist có tồn tại không
   if (!fs.existsSync(distPath)) {
-    console.error('Thư mục dist không tồn tại. Vui lòng chạy lệnh npm run build trước.');
+    console.error('Folder dist does not exist. Please run npm run build before.');
     return false;
   }
 
   try {
     // Tìm cổng trống
     PORT = await findAvailablePort(PORT);
-    console.log(`Tìm thấy cổng trống: ${PORT}`);
+    console.log(`Found available port: ${PORT}`);
   } catch (err) {
-    console.error('Không thể tìm cổng trống:', err);
+    console.error('Error finding available port:', err);
     return false;
   }
   // Cấu hình Express để phục vụ các file tĩnh
@@ -69,11 +69,11 @@ async function startServer() {
   // Khởi động server
   return new Promise((resolve) => {
     server.listen(PORT, () => {
-      console.log(`Server đang chạy tại http://localhost:${PORT}`);
+      console.log(`Server running at http://localhost:${PORT}`);
       serverRunning = true;
       resolve(true);
     }).on('error', (err) => {
-      console.error('Lỗi khi khởi động server:', err);
+      console.error('Error starting server:', err);
       resolve(false);
     });
   });
@@ -84,12 +84,12 @@ const checkDistFolder = () => {
   const indexPath = path.join(distPath, 'index.html');
 
   if (!fs.existsSync(distPath)) {
-    console.error('Thư mục dist không tồn tại. Vui lòng chạy lệnh npm run build trước.');
+    console.error('Folder dist does not exist. Please run npm run build before.');
     return false;
   }
 
   if (!fs.existsSync(indexPath)) {
-    console.error('File index.html không tồn tại trong thư mục dist. Vui lòng chạy lệnh npm run build trước.');
+    console.error('File index.html does not exist in the dist folder. Please run npm run build before.');
     return false;
   }
 
@@ -114,6 +114,7 @@ const createWindow = async () => {
     height: 600,
     maximizable: true,
     autoHideMenuBar: true,
+    devTools: false ,
     hasShadow: false,
     show: true,
     // Sử dụng file .icns đã được tạo bởi electron-icon-builder
@@ -122,7 +123,8 @@ const createWindow = async () => {
       preload: path.join(__dirname, 'preload.js')
     }
   });
-  window.setMinimumSize(450, 300);
+
+  window.setMinimumSize(450, 400);
   // Sử dụng server web thay vì file local
   window.loadURL(`http://localhost:${PORT}/`);
 
@@ -149,7 +151,7 @@ const createWindow = async () => {
       }
       return shouldPin;
     } catch (error) {
-      console.error('Lỗi khi cập nhật trạng thái ghim cửa sổ:', error);
+      console.error('Error updating pin window state:', error);
       return false;
     }
   });

@@ -6,6 +6,7 @@ export default createStore({
         break_duration:localStorage.getItem('break_pomodoro') ?localStorage.getItem('break_pomodoro') : 5,
         // Lịch sử bài hát, lấy từ localStorage hoặc tạo mới nếu chưa có
         songHistory: localStorage.getItem('song_history') ? JSON.parse(localStorage.getItem('song_history')) : [],
+
         // Danh sách bài hát yêu thích, lấy từ localStorage hoặc tạo mới nếu chưa có
         favoriteSongs: localStorage.getItem('favorite_songs') ? JSON.parse(localStorage.getItem('favorite_songs')) : [],
     },
@@ -33,8 +34,8 @@ export default createStore({
             // Thêm bài mới vào đầu danh sách
             state.songHistory.unshift(song);
             
-            // Giớí hạn chỉ lưu 10 bài gần nhất
-            if (state.songHistory.length > 10) {
+            // Giớí hạn chỉ lưu 50 bài gần nhất
+            if (state.songHistory.length > 50) {
                 state.songHistory.pop(); // Xóa bài cũ nhất (ở cuối mảng)
             }
             
