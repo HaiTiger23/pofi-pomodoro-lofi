@@ -1,0 +1,104 @@
+name: Build Pofi App
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Vue app
+        run: npm run build
+
+      - name: Generate icons
+        run: npm run generate-icons
+
+      - name: Package for macOS
+        run: npm run package
+
+      - name: Zip macOS app
+        run: |
+          cd package
+          zip -r Pofi-mac.zip Pofi-darwin-x64
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: pofi-macos
+          path: package/Pofi-mac.zip
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Vue app
+        run: npm run build
+
+      - name: Generate icons
+        run: npm run generate-icons
+
+      - name: Package for Windows
+        run: |
+          npm run package-win
+
+      - name: Zip Windows app
+        run: |
+          cd package
+          powershell Compress-Archive -Path Pofi-win32-x64 -DestinationPath Pofi-win.zip
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: pofi-windows
+          path: package/Pofi-win.zip
+
+  create-release:
+    needs: [build-mac, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            pofi-macos/Pofi-mac.zip
+            pofi-windows/Pofi-win.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
