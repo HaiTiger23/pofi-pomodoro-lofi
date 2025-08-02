@@ -65,13 +65,15 @@ Pofi là ứng dụng Pomodoro kết hợp với nhạc nền từ YouTube, giú
 5. Lọc công việc bằng các nút "Tất cả", "Đang làm", "Hoàn thành"
 6. Xóa công việc đã hoàn thành bằng nút "Xóa đã hoàn thành"
 
-## Cập nhật mới nhất
- (v1.1.1)
- - Cải thiện giao diện người dùng
- - Cho phép người dùng xóa lịch sử bài hát 
- - Thêm chức năng xem video 
- - Random bài hát mới sau khi hết bài
- (v1.1.0)
+## Lịch sử phiên bản
+
+### v1.2.1
+- Cải thiện giao diện người dùng
+- Cho phép người dùng xóa lịch sử bài hát 
+- Thêm chức năng xem video 
+- Random bài hát mới sau khi hết bài
+
+### v1.1.0
 - ✨ Thêm tính năng Quản lý công việc
 - 🔊 Bổ sung thêm nhiều âm thanh môi trường
 - 🌙 Cải thiện giao diện người dùng
