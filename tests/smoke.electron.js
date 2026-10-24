@@ -259,11 +259,14 @@ app.on('web-contents-created', (_event, contents) => {
           assert.equal(await evaluate(`(await window.electronAPI.initializeStorage({})).background_mode`), background);
           assert.equal(await evaluate(`(await window.electronAPI.initializeStorage({})).liquid_glass`), 'true');
           assert.equal(await evaluate(`document.querySelector('[data-testid="liquid-glass-toggle"]').getAttribute('aria-checked')`), 'true');
-          assert.match(await evaluate(`getComputedStyle(document.querySelector('.primary-button')).backgroundImage`), /radial-gradient/);
+          assert.match(await evaluate(`getComputedStyle(document.querySelector('.primary-button>.pofi-glass-warp')).backgroundImage`), /radial-gradient/);
+          assert.match(await evaluate(`getComputedStyle(document.querySelector('.primary-button>.pofi-glass-warp')).filter`), /url/);
+          assert.equal(await evaluate(`getComputedStyle(document.querySelector('.timer-digits')).filter`), 'none');
           await evaluate(`document.querySelector('[data-testid="liquid-glass-toggle"]').click()`);
           await delay(30);
           assert.equal(await evaluate(`document.documentElement.dataset.glass`), 'false');
           assert.equal(await evaluate(`getComputedStyle(document.querySelector('.primary-button')).backgroundImage`), 'none');
+          assert.equal(await evaluate(`document.querySelectorAll('.pofi-glass-warp,[data-pofi-glass-filters]').length`),0);
         }
         await evaluate(`document.querySelector('[data-background-mode="scene"]').click()`);
         await fits();

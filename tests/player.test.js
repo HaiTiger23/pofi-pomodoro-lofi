@@ -73,6 +73,21 @@ test('unavailable videos stop loading and can be retried', () => {
   assert.equal(f.players.length, 2);
   f.controller.destroy();
 });
+test('startup cues the saved song silently; manual play and subsequent selections still work', async () => {
+  const f = fixture();
+  f.controller.load('DnewVhYNt-I', 100, { autoplay: false });
+  await f.players[0].emit('ready');
+  assert.equal(f.controller.ready, true);
+  assert.equal(f.players[0].plays, 0);
+  assert.equal(f.intervals.size, 0);
+  await f.controller.toggle();
+  assert.equal(f.players[0].plays, 1);
+  f.controller.load('ukHK1GVyr0I');
+  await f.players[1].emit('ready');
+  assert.equal(f.players[1].plays, 1);
+  f.controller.destroy();
+});
+
 test('ambient players muted before ready do not autoplay', async () => {
   const f = fixture();
   let enabled = true;
@@ -87,7 +102,7 @@ test('ambient players muted before ready do not autoplay', async () => {
 });
 
 test('player distinguishes blocked videos from network and embed identity errors', () => {
-  for (const [data, expected] of [[100,/xóa|riêng tư/],[101,/không cho phát/],[150,/không cho phát/],[153,/xác nhận/],[2,/không hợp lệ/]]) {
+  for (const [data, expected] of [[100,/xóa|riêng tư/],[101,/mã 101/],[150,/mã 150/],[153,/xác nhận/],[2,/không hợp lệ/]]) {
     const f = fixture(); f.controller.load('DnewVhYNt-I');
     f.players[0].emit('error', { data });
     assert.match(f.errors[0], expected);

@@ -3,7 +3,7 @@ const { validDockScale, windowLayout } = require('./window-preferences');
 const DEFAULTS = {
   duration_pomodoro: '45', break_pomodoro: '5', long_break_pomodoro: '15', long_break_interval: '4',
   auto_start_breaks: 'false', auto_start_pomodoros: 'false', fullscreen_reminders: 'false', dock_scale: '100', window_layout: '{}', song_history: '[]',
-  favorite_songs: '[]', pofi_tasks: '[]', latestSong: 'DnewVhYNt-I', youtube_api_key: '', ui_theme: 'warm', background_mode: 'scene', liquid_glass: 'false'
+  favorite_songs: '[]', pofi_tasks: '[]', latestSong: 'DnewVhYNt-I', youtube_api_key: '', ui_theme: 'warm', background_mode: 'scene', liquid_glass: 'false', liquid_glass_dark: 'false'
 };
 function migrateAppearance(values) {
   if (!values || typeof values !== 'object' || Array.isArray(values) || values.ui_theme !== 'glass') return values;
@@ -32,7 +32,7 @@ function normalize(key, raw) {
   if (key === 'window_layout') return JSON.stringify(windowLayout(raw));
   if (key === 'ui_theme') return isTheme(raw) ? raw : DEFAULTS.ui_theme;
   if (key === 'background_mode') return ['scene', 'youtube', 'video'].includes(raw) ? raw : 'scene';
-  if (['liquid_glass', 'auto_start_breaks', 'auto_start_pomodoros', 'fullscreen_reminders'].includes(key)) return raw === true || raw === 'true' ? 'true' : 'false';
+  if (['liquid_glass', 'liquid_glass_dark', 'auto_start_breaks', 'auto_start_pomodoros', 'fullscreen_reminders'].includes(key)) return raw === true || raw === 'true' ? 'true' : 'false';
   if (key === 'long_break_interval') return validInterval(raw) ? String(Number(raw)) : DEFAULTS[key];
   if (['duration_pomodoro', 'break_pomodoro', 'long_break_pomodoro'].includes(key)) return String(duration(raw, Number(DEFAULTS[key])));
   if (key === 'latestSong') return validVideoId(raw) ? raw : DEFAULTS[key];

@@ -7,6 +7,7 @@ async function bootstrap() {
   await initializeStorage();
   document.documentElement.dataset.theme = getItem('ui_theme');
   document.documentElement.dataset.glass = getItem('liquid_glass');
+  document.documentElement.dataset.glassDark = getItem('liquid_glass_dark');
   document.documentElement.dataset.desktop = String(Boolean(window.electronAPI));
   const [{ default: App }, { default: store }] = await Promise.all([import('./App.vue'), import('./store')]);
   createApp(App).use(store).mount('#app');

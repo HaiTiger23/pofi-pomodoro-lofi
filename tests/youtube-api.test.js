@@ -65,6 +65,7 @@ test('native adapter forwards readiness and methods with the real embedding orig
   f.finishAPI(); await Promise.resolve();
   const native = f.natives[0];
   assert.equal(native.options.playerVars.origin, 'http://127.0.0.1:8080');
+  assert.equal(native.options.host, 'https://www.youtube-nocookie.com');
   native.options.events.onReady({ target: native });
   assert.equal(await f.player.getDuration(), 120);
   await f.player.setVolume(37); assert.equal(native.volume, 37);

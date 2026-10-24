@@ -176,6 +176,10 @@ async function createWindow() {
     icon: path.join(__dirname, 'pofi_logo.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      // App preferences are persisted by SettingsStorage. Give remote playback
+      // a fresh, in-memory browser session on launch instead of reusing stale
+      // YouTube site data from previous runs. The old profile is left intact.
+      partition: 'pofi-playback',
       contextIsolation: true, nodeIntegration: false, sandbox: true,
       devTools: Boolean(devUrl)
     }

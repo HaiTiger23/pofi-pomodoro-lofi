@@ -48,6 +48,7 @@ function createPlayerAdapter(element, options, loadAPI) {
     if (destroyed) return;
     native = new YT.Player(element, {
       ...options,
+      host: 'https://www.youtube-nocookie.com',
       playerVars: { ...options.playerVars, ...(/^https?:\/\//.test(origin) ? { origin } : {}) },
       events: {
         onReady: event => { if (!destroyed) { settleReady(event.target); emit('ready', event); } },

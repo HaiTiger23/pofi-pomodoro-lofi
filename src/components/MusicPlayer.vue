@@ -26,7 +26,7 @@
           </div>
         </div>
         <div class="track-progress"><time>{{ fomartDuration(current_music.currentTime) }}</time><input class="progress-range" type="range" min="0" step="1" :max="Math.max(1, current_music.duration)" :disabled="!videoStatus || !current_music.duration" aria-label="Tiến độ bài hát" v-model.number="range" :style="{ '--range-value': (current_music.duration ? range / current_music.duration * 100 : 0) + '%' }" @change="changeCurrentTime" @pointerdown="pauseRange" @pointerup="resumeRange" @pointercancel="resumeRange" /><time>{{ fomartDuration(current_music.duration) }}</time></div>
-        <p v-if="error" role="alert" class="inline-error">{{ error }} <button class="text-button" @click="playSong(current_music.videoId)">Thử lại</button></p>
+        <p v-if="error" role="alert" class="inline-error">{{ error }} <button class="text-button" @click="playSong(current_music.videoId)">Thử lại</button> · <a class="text-button" :href="'https://www.youtube.com/watch?v=' + current_music.videoId" target="_blank" rel="noopener">Mở YouTube</a></p>
       </section>
       <button v-if="dockMode" class="icon-button dock-expand" aria-label="Mở rộng ứng dụng" title="Mở rộng giao diện" @click="$emit('expand')"><i class="ri-fullscreen-line" aria-hidden="true"></i></button>
       <span v-if="dockMode" class="dock-resize-handle" role="slider" tabindex="0" aria-label="Kích thước dock" title="Kéo để đổi kích thước dock" aria-valuemin="80" aria-valuemax="160" :aria-valuenow="$store.state.dockScale" :aria-valuetext="$store.state.dockScale + '%'" @pointerdown="startDockResize" @pointermove="moveDockResize" @pointerup="endDockResize" @pointercancel="endDockResize" @lostpointercapture="endDockResize" @keydown="resizeDockKey"><i class="ri-draggable"></i></span>
@@ -81,7 +81,7 @@ export default {
       onEnd: () => this.playSong(this.getRandomVideoId()),
       onError: message => { this.error = message; if (this.current_music.title === 'Đang tải video…') this.current_music.title = 'Chưa tải được bài hát'; }
     });
-    this.playSong(this.current_music.videoId);
+    this.playSong(this.current_music.videoId, false);
     window.addEventListener('keydown', this.onKey);
   },
   beforeUnmount() { this.controller.destroy(); window.removeEventListener('keydown', this.onKey); if (this.resizeFrame) cancelAnimationFrame(this.resizeFrame); },
@@ -118,14 +118,14 @@ export default {
     closeSearch() { this.searchOpen = false; },
     onKey(event) { if (event.key === 'Escape') this.searchOpen = false; },
     selectSong(id) { this.playSong(id); this.searchOpen = false; },
-    playSong(videoId) {
+    playSong(videoId, autoplay = true) {
       if (!validVideoId(videoId)) return;
       this.error = '';
       this.current_music = { title: 'Đang tải video…', videoId, duration: 0, currentTime: 0 };
       this.range = 0;
       this.dragging = false;
       setItem('latestSong', videoId);
-      try { this.controller.load(videoId, this.volume); } catch (error) { this.handleControlError(error); }
+      try { this.controller.load(videoId, this.volume, { autoplay }); } catch (error) { this.handleControlError(error); }
     },
     handleControlError(error) {
       console.warn('YouTube player:', error && error.message);

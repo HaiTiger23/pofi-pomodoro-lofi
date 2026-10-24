@@ -93,6 +93,12 @@ test('glass preference is independent of palettes and background sources in lega
   assert.equal(normalize('liquid_glass', 'false'), 'false');
   assert.equal(normalize('liquid_glass', 'invalid'), 'false');
   assert.equal(normalize('liquid_glass', true), 'true');
+  store.set('liquid_glass_dark', true);
+  values = new SettingsStorage(file).initialize();
+  assert.equal(values.liquid_glass_dark, 'true');
+  assert.equal(values.ui_theme, 'garden');
+  assert.equal(values.background_mode, 'youtube');
+  assert.equal(normalize('liquid_glass_dark', 'invalid'), 'false');
   assert.deepEqual(migrateAppearance({ ui_theme: 'glass', liquid_glass: 'false' }), { ui_theme: 'night', liquid_glass: 'false' });
 });
 

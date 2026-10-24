@@ -5,6 +5,11 @@
       <span class="glass-toggle-copy"><strong>Liquid Glass</strong><small>Hiệu ứng kính trên mọi nền</small></span>
       <span class="glass-toggle-track" aria-hidden="true"><span></span></span>
     </button>
+    <button v-if="liquidGlass" class="glass-toggle glass-dark-toggle" role="switch" :aria-checked="glassDark" data-testid="glass-dark-toggle" @click="$store.commit('setGlassDark', !glassDark)">
+      <span class="glass-toggle-icon"><i class="ri-moon-line" aria-hidden="true"></i></span>
+      <span class="glass-toggle-copy"><strong>Kính tối</strong><small>Dùng cho nền sáng</small></span>
+      <span class="glass-toggle-track" aria-hidden="true"><span></span></span>
+    </button>
     <p class="panel-intro">Chọn ảnh tĩnh, ảnh bài nhạc làm mờ<br />hoặc video YouTube đang phát.</p>
     <div class="background-options" role="group" aria-label="Nguồn nền">
       <button v-for="mode in backgrounds" :key="mode.id" :data-background-mode="mode.id" :class="{ active: backgroundMode === mode.id }" :aria-pressed="backgroundMode === mode.id" @click="$store.commit('setBackgroundMode', mode.id)"><i :class="mode.icon"></i>{{ mode.name }}</button>
@@ -27,7 +32,7 @@ import { THEMES, BACKGROUNDS } from '../../shared/themes';
 export default {
   components: { DrawerPanel }, props: { open: Boolean }, emits: ['close'],
   data: () => ({ themes: THEMES, backgrounds: BACKGROUNDS }),
-  computed: { selected() { return this.$store.state.theme; }, backgroundMode() { return this.$store.state.backgroundMode; }, liquidGlass() { return this.$store.state.liquidGlass; } },
+  computed: { selected() { return this.$store.state.theme; }, backgroundMode() { return this.$store.state.backgroundMode; }, liquidGlass() { return this.$store.state.liquidGlass; }, glassDark() { return this.$store.state.glassDark; } },
   methods: {
     select(id) { this.$store.commit('setTheme', id); },
     async onKey(event) {

@@ -11,7 +11,7 @@ class PlayerController {
     this.ready = false;
     this.playing = false;
   }
-  load(videoId, volume = 100) {
+  load(videoId, volume = 100, { autoplay = true } = {}) {
     this.release();
     const generation = this.generation;
     this.volume = volume;
@@ -34,8 +34,8 @@ class PlayerController {
         2: 'Link hoặc mã video không hợp lệ. Hãy chọn lại bài hát.',
         5: 'YouTube không phát được video này. Bấm Thử lại để tải lại trình phát.',
         100: 'Video đã bị xóa hoặc chuyển riêng tư. Hãy chọn bài khác.',
-        101: 'Chủ video không cho phát trong ứng dụng. Hãy chọn bài khác.',
-        150: 'Chủ video không cho phát trong ứng dụng. Hãy chọn bài khác.',
+        101: 'YouTube từ chối phát nhúng video này (mã 101). Thử bài khác hoặc mở trên YouTube.',
+        150: 'YouTube từ chối phát nhúng video này (mã 150). Thử bài khác hoặc mở trên YouTube.',
         153: 'YouTube chưa xác nhận được trình phát. Hãy mở lại ứng dụng rồi thử lại.'
       };
       this.onError(messages[code] || (['API_NETWORK','API_TIMEOUT'].includes(error?.code) ? error.message : 'Không thể kết nối trình phát YouTube. Kiểm tra mạng rồi bấm Thử lại.'));
@@ -52,7 +52,7 @@ class PlayerController {
         if (!current()) return;
         this.onUpdate({ duration: Number(duration) || 0 });
         this.onReady({ videoId, title: iframe.title || 'YouTube' });
-        if (this.shouldPlay()) await player.playVideo();
+        if (autoplay && this.shouldPlay()) await player.playVideo();
       } catch { fail(); }
     }));
     this.listeners.push(player.on('stateChange', event => {

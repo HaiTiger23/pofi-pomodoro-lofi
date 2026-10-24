@@ -42,6 +42,12 @@ Nút chọn giao diện ở thanh trên cùng có ba theme: **Góc ấm**, **Đ�
 
 **Liquid Glass** là công tắc riêng ở đầu bảng Giao diện & nền, áp dụng hiệu ứng kính trong, viền phản sáng và nút bo tròn cho mọi theme. Bật/tắt hiệu ứng không đổi nền hay bảng màu; trạng thái được lưu tự động. Theme Liquid Glass cũ tự chuyển thành nền Đêm mơ cùng hiệu ứng kính bật.
 
+Khi mở app, bài nhạc đã lưu được nạp ở trạng thái dừng; bấm phát hoặc chọn bài để nghe.
+
+Khi bật kính, có thêm **Kính tối · Dùng cho nền sáng**: phủ sắc khói lên card/nút và chuyển chữ trên kính sang màu sáng. Tùy chọn được lưu riêng, dùng cùng mọi nền. Kính dùng hiệu ứng tĩnh; không hút, kéo giãn, phản sáng theo chuột hay đổi hiệu ứng khi hover/nhấn.
+
+Hiệu ứng mới tham khảo [liquid-glass-react của rdev](https://github.com/rdev/liquid-glass-react): nền khúc xạ ở mép kính, viền tán sắc nhẹ và phản sáng cố định. Chữ/đồng hồ giữ nét; bảng tìm nhạc vẫn có nền rõ. Hiệu ứng chạy trên Vue, hỗ trợ mọi kiểu nền. [Giấy phép tham khảo MIT](public/licenses/liquid-glass-react.txt) được đóng kèm ứng dụng.
+
 Nguồn nền có thể chọn riêng: **Ảnh lofi** tĩnh, **YouTube mờ** từ ảnh bài nhạc đang phát hoặc **Video** YouTube. Có thể chuyển nhanh bằng nút đổi nền ở thanh nhạc.
 
 Ứng dụng mở trong cửa sổ 460×620, thu nhỏ được đến 320×340 và có nút ghim luôn ở trên. Bố cục tự co theo cả chiều rộng và chiều cao; toàn app không cuộn dọc hoặc ngang. Chỉ nội dung trong bảng và danh sách dài được cuộn.
@@ -100,6 +106,8 @@ Tìm kiếm cần kết nối Internet và đọc kết quả công khai từ Yo
 
 Trình phát tải SDK qua HTTPS. Nếu lần tải đầu bị lỗi mạng hoặc quá thời gian, **Thử lại** tạo yêu cầu mới, không giữ trạng thái lỗi cho các bài sau. App phân biệt lỗi kết nối, video bị xóa/riêng tư và video không cho nhúng; khi trình duyệt chặn tự phát, nút play vẫn dùng được để bắt đầu thủ công.
 
+Bản desktop dùng một phiên trình duyệt trong bộ nhớ mới khi khởi động và player `youtube-nocookie` chính thức, giúp tránh tái dùng dữ liệu YouTube lỗi từ lần mở trước. Dữ liệu ứng dụng vẫn nằm trong file SettingsStorage; không sao chép hay xóa cookie của profile cũ. Nếu YouTube vẫn từ chối phát nhúng (101/150), thông báo hiện mã lỗi cùng liên kết **Mở YouTube**.
+
 ### Quản lý công việc
 1. Nhấp vào biểu tượng danh sách công việc ở góc trên bên phải
 2. Nhập tên công việc và chọn mức độ ưu tiên
@@ -112,6 +120,7 @@ Trình phát tải SDK qua HTTPS. Nếu lần tải đầu bị lỗi mạng ho�
 
 ### Chưa phát hành
 
+- Nâng Liquid Glass theo mẫu rdev: khúc xạ SVG ở mép, viền tán sắc/phản sáng cố định; giữ nội dung sắc nét, dọn tài nguyên khi tắt.
 - Sửa tải player qua HTTP và lỗi lần tải đầu làm các lần thử sau bị kẹt; tải SDK bằng HTTPS, hỗ trợ thử lại và báo lỗi phát cụ thể.
 - Tách nghỉ ngắn/nghỉ dài, chọn số vòng trước nghỉ dài và tự bắt đầu riêng cho nghỉ/tập trung.
 - Đếm phiên tập trung hoàn thành; tạm dừng hoặc bỏ qua nghỉ mà vẫn giữ tiến độ vòng.

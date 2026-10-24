@@ -16,7 +16,7 @@ Pofi uses one compact desktop layout and three complete visual themes. Theme cha
 - Persistent theme selection, radio semantics and arrow-key support: `src/components/ThemePicker.vue`.
 - Desktop persistence key: `ui_theme`, validated against the available themes. Invalid values recover to `warm`.
 - Background artwork: `public/themes/{warm,night,garden}.webp`; original PNGs are retained in `design/artwork/`.
-- `liquid_glass` saves the independent material preference (`true`/`false`). The root `data-glass` attribute enables translucent cards, capsule controls, lens-like edge highlights and pointer lighting while preserving the selected palette and background. The toggle lives at the top of the appearance panel, outside the theme radio group.
+- `liquid_glass` saves the independent material preference (`true`/`false`). The root `data-glass` attribute enables translucent cards, capsule controls, lens-like edge highlights and static reflections while preserving the selected palette and background. The toggle lives at the top of the appearance panel, outside the theme radio group.
 - The retired `glass` theme migrates to `night` with the material enabled; explicit saved off preferences are preserved.
 - Background source is independent of theme: `background_mode` saves `scene` (static lofi artwork), `youtube` (blurred current video thumbnail) or `video` (playing YouTube video).
 
@@ -36,9 +36,9 @@ The coffee-and-headphones logo uses `public/pofi-logo.png` in the header and `po
 
 ## Compact dock
 
-The window's dock button switches to a 320×72 capsule with the existing countdown, music play/pause button and an expand action. CSS changes the layout without remounting the timer or YouTube player. Background, palette and glass preferences are retained. The capsule is a native drag region with `no-drag` controls and no application scrolling. On Windows/Linux the [Electron window shape API](https://www.electronjs.org/docs/latest/api/base-window#winsetshaperects-windows-linux-experimental) clips the window and its input region to the capsule; unsupported window managers keep a rectangular native region.
+The window's dock button switches to a 320×72 capsule with the existing countdown, timer start/pause, Skip, music play/pause and expand actions. Timer uses an inline SVG stopwatch inside a rounded square; music keeps the circular play/pause control. CSS changes the layout without remounting the timer or YouTube player. Background, palette and glass preferences are retained. The capsule is a native drag region with `no-drag` controls and no application scrolling. On Windows/Linux the [Electron window shape API](https://www.electronjs.org/docs/latest/api/base-window#winsetshaperects-windows-linux-experimental) clips the window and its input region to the capsule; unsupported window managers keep a rectangular native region.
 
-`electron/window-mode.js` owns native sizing and serialized transitions. Entering dock saves normal bounds, maximize state, size limits and the previous pin, then automatically pins the dock. Expanding restores those properties. A moved dock shifts the restored window by the same amount and clamps it to the display work area. The mode is session state, separate from persisted appearance preferences; a fresh launch starts in the full interface.
+`electron/window-mode.js` owns native sizing and serialized transitions. Entering dock saves normal bounds, maximize state, size limits and the previous pin, then automatically pins the dock. Expanding restores those properties. Dock and normal window positions are saved independently and fitted to an available display work area; moving one never shifts the other's saved position. The dock scales from 80–160% through Settings or its drag handle. A fresh launch starts in the full interface with saved position and appearance preferences.
 
 ## Music search
 
@@ -48,9 +48,18 @@ The search service returns the full initial video page (up to 50 items per respo
 
 ## Liquid Glass material
 
-The implementation takes visual direction from [Apple's Liquid Glass design](https://www.apple.com/newsroom/2025/06/apple-introduces-a-delightful-and-elegant-new-software-design/): translucent functional layers, rounded controls and specular highlights. This Electron/CSS interpretation uses backdrop blur and saturation, masked gradient rims, inset highlights and local pointer reflections; it does not use Apple's native SwiftUI/AppKit material or claim identical optical rendering.
+The optical approach follows [rdev/liquid-glass-react](https://github.com/rdev/liquid-glass-react), as requested: a separate backdrop layer with SVG displacement, RGB channel separation near the edge, static specular rims. This is a Vue/Electron adaptation, without installing React or importing the reference's bitmap maps or shader generator. The filter-channel technique is MIT-licensed by Max Rovensky; the full copyright and license notice ships in [public/licenses/liquid-glass-react.txt](../public/licenses/liquid-glass-react.txt). It is not Apple's native SwiftUI/AppKit material.
 
-The material changes cards, the toolbar, player dock, panels, buttons, switches and fields. It does not select artwork, set background mode or change the palette. Garden retains light glass with dark text; evening themes retain dark glass with light text. Local highlights update at most once per animation frame and stop on pointer leave, window blur, reduced motion or touch input. There is no continuous animation loop.
+`src/services/glass-optics.js` generates rounded-rectangle lens maps locally. The center is neutral; only a narrow perimeter bends and separates the background's color channels. Each `.pofi-glass-warp` layer has the backdrop filter and SVG filter; text, icons, inputs and timer digits remain outside this layer and stay sharp. Masked rims provide fixed reflections. Panels retain stronger tint for readability, and the music-search panel stays opaque.
+
+`src/services/liquid-glass.js` attaches the material to cards, toolbar, player dock, panels and controls. Filter definitions are shared by matching geometry; raster maps are capped at 384px on their longest side. ResizeObserver rebuilds them only when geometry changes. Hidden/display-contents containers relinquish their lenses when switching into dock mode. Toggling off or unmounting removes layers, SVG resources, observers, pending animation frames.
+
+SVG primitives use numeric user-space dimensions, so displacement maps remain valid inside the shared zero-size definitions SVG. RGB recombination restores the source alpha and adds complementary edge/center masks, avoiding a dark beveled seam. `npm run test:glass` (with `POFI_DEV_URL` set to the active dev server, or after a Vue build) compares screenshots over a fixed grid: edge pixels must refract while center pixels remain unchanged. It also checks that hover/press do not change the material, theme/background combinations, clean toggling and dock restoration. Artifacts go to `.test-output/glass/`.
+
+The material does not select artwork or set background mode. The optional **Kính tối** switch persists `liquid_glass_dark` independently: smoky surfaces and light foregrounds improve contrast over bright scenes on all themes. It is visible while glass is enabled and retains its selection when glass is turned off. The garden accent also becomes lighter within dark glass; the scene and outer palette remain selected.
+
+Glass has no pointer listeners, attraction, stretch or moving highlights. Hover and press styling is disabled while glass is enabled; keyboard focus rings and selected states remain available. If canvas/filter setup is unavailable, frosted CSS glass remains usable. There is no continuous animation loop.
+
 
 ## Artwork provenance and exact generation prompts
 

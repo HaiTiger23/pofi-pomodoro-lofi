@@ -35,21 +35,23 @@ import SongFavorites from './components/Favorites.vue';
 import TodoList from './components/toDoList.vue';
 import ThemePicker from './components/ThemePicker.vue';
 import { THEMES } from '../shared/themes';
-import { attachGlassLighting } from './services/liquid-glass';
+import { attachGlassMaterial } from './services/liquid-glass';
 import WindowControls from './components/WindowControls.vue';
 export default {
   components: { MusicPlayer, PomoDoro, SideBar, SongHistory, SongFavorites, TodoList, ThemePicker, WindowControls },
   data: () => ({ drawer: null, storageError: false, desktop: Boolean(window.electronAPI), pinBusy: false, pinError: '', dockError: '', navigationOpen: false, compactNavigation: window.matchMedia('(max-width: 519px)').matches }),
   computed: {
     theme() { return THEMES.find(theme => theme.id === this.$store.state.theme) || THEMES[0]; },
-    liquidGlass() { return this.$store.state.liquidGlass; }
+    liquidGlass() { return this.$store.state.liquidGlass; },
+    glassDark() { return this.$store.state.glassDark; }
   },
   watch: {
     theme: { immediate: true, handler(theme) { document.documentElement.dataset.theme = theme.id; } },
-    liquidGlass: { immediate: true, handler(enabled) { document.documentElement.dataset.glass = String(enabled); } }
+    liquidGlass: { immediate: true, handler(enabled) { document.documentElement.dataset.glass = String(enabled); } },
+    glassDark: { immediate: true, handler(enabled) { document.documentElement.dataset.glassDark = String(enabled); } }
   },
   async mounted() {
-    this.removeGlassLighting = attachGlassLighting(document);
+    this.removeGlassMaterial = attachGlassMaterial(document);
     window.addEventListener('storage-error', this.handleStorageError);
     this.navigationQuery = window.matchMedia('(max-width: 519px)');
     this.navigationQuery.addEventListener('change', this.onNavigationWidth);
@@ -59,7 +61,7 @@ export default {
     if (window.electronAPI?.getWindowState) { try { this.applyWindowState(await window.electronAPI.getWindowState()); } catch { /* Keep window controls available for retry. */ } }
   },
   beforeUnmount() {
-    this.removeGlassLighting?.(); this.removeWindowState?.(); window.removeEventListener('storage-error', this.handleStorageError);
+    this.removeGlassMaterial?.(); this.removeWindowState?.(); window.removeEventListener('storage-error', this.handleStorageError);
     this.navigationQuery?.removeEventListener('change', this.onNavigationWidth);
     document.removeEventListener('pointerdown', this.onNavigationOutside, true);
     document.removeEventListener('keydown', this.onNavigationKey);
