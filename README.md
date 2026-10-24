@@ -7,9 +7,12 @@ Pofi là ứng dụng Pomodoro kết hợp với nhạc nền từ YouTube, giú
 ## Tính năng chính
 
 ### 🕒 Pomodoro Timer
-- Thiết lập thời gian làm việc và nghỉ ngơi
+- Thiết lập riêng thời gian tập trung, nghỉ ngắn và nghỉ dài
+- Chọn số vòng tập trung trước mỗi lần nghỉ dài (1–100 vòng)
+- Bật/tắt riêng tự bắt đầu nghỉ và tự bắt đầu phiên tập trung
+- Hiển thị vòng hiện tại, tổng phiên hoàn thành; tạm dừng/tiếp tục cả khi nghỉ
 - Thông báo khi kết thúc phiên làm việc/nghỉ ngơi
-- Tự động chuyển đổi giữa các phiên
+- Chuyển sang phiên tiếp theo và chờ bấm bắt đầu, hoặc chạy tự động theo lựa chọn
 
 ### 🎵 Nhạc nền
 - Phát nhạc từ YouTube
@@ -47,7 +50,11 @@ Thanh tiêu đề hệ thống được thay bằng điều khiển ngay trong a
 
 Logo lofi mới dùng hình cốc cà phê và tai nghe, đồng bộ trong app, favicon và bộ icon Windows/macOS. Ảnh gốc và prompt được lưu trong [tài liệu logo](design/logo-prompt.md).
 
-Nút **Thu gọn thành dock** ở cạnh các nút cửa sổ chuyển app thành thanh ngang 320×72, chỉ hiện đồng hồ Pomodoro, play/pause nhạc và nút mở rộng. Dock tự ghim lên trên và kéo được bằng vùng trống. Timer và player giữ nguyên, nhạc không bị tải lại khi đổi chế độ. Mở rộng khôi phục kích thước, trạng thái phóng to và trạng thái ghim trước đó; nếu kéo dock sang vị trí khác thì app mở rộng tại vị trí mới, trong vùng màn hình đang dùng.
+Nút **Thu gọn thành dock** ở cạnh các nút cửa sổ chuyển app thành thanh ngang 320×72. Thứ tự điều khiển: đồng hồ → bắt đầu/tạm dừng timer → Skip → play/pause nhạc → mở rộng. Dock tự ghim lên trên, kéo được bằng vùng trống và giữ nguyên timer/player khi đổi chế độ.
+
+Cửa sổ thường và dock nhớ **hai vị trí riêng**: kéo dock không làm đổi vị trí cửa sổ thường, và chuyển lại dock trở về đúng vị trí dock trước đó. Vị trí, kích thước cửa sổ thường và trạng thái phóng to được lưu khi mở lại app; nếu màn hình cũ không còn kết nối, vị trí tự nằm lại trong màn hình hiện có. Mở rộng khôi phục trạng thái ghim trước khi thu vào dock.
+
+Trong **Settings → Thanh dock**, kéo thanh **Kích thước** từ 80–160% (256×58 đến 512×115). Có thể kéo tay nắm ở mép phải dock để đổi trực tiếp; khi tay nắm có focus, dùng mũi tên để đổi 5%, Home/End để chọn nhỏ nhất/lớn nhất. Kích thước được lưu tự động; nội dung co theo cùng tỷ lệ.
 
 Quy chuẩn màu sắc, component và prompt tạo ảnh được ghi trong [bộ giao diện](docs/design-system.md).
 
@@ -67,10 +74,19 @@ Quy chuẩn màu sắc, component và prompt tạo ảnh được ghi trong [b�
 ## Hướng dẫn sử dụng
 
 ### Pomodoro Timer
-1. Thiết lập thời gian làm việc và nghỉ ngơi
-2. Nhấn nút "Bắt đầu" để khởi động timer
-3. Làm việc cho đến khi hết thời gian
-4. Nghỉ ngơi khi timer chuyển sang chế độ nghỉ
+1. Mở **Settings → Nhịp Pomodoro** để chỉnh **Tập trung**, **Nghỉ ngắn**, **Nghỉ dài** và **Nghỉ dài sau** bao nhiêu vòng.
+2. Mặc định tập trung 45 phút, nghỉ ngắn 5 phút, nghỉ dài 15 phút sau mỗi 4 vòng. Thời lượng tập trung/nghỉ cũ được giữ lại khi nâng cấp; nghỉ cũ trở thành nghỉ ngắn.
+3. Bật riêng **Tự bắt đầu nghỉ** và **Tự bắt đầu tập trung** nếu muốn. Cả hai mặc định tắt; khi chuyển phiên, đồng hồ chờ bạn bấm bắt đầu.
+4. Nhấn **Bắt đầu tập trung**. Mỗi phiên tập trung hoàn thành được tính một vòng; sau số vòng đã chọn, nghỉ dài thay cho nghỉ ngắn, rồi chu kỳ tiếp tục.
+5. Có thể tạm dừng/tiếp tục cả phiên làm việc và nghỉ. **Skip** từ tập trung sang nghỉ vẫn **cộng 1 vòng**, tính vào mốc nghỉ dài; Skip từ nghỉ sang tập trung không cộng thêm vòng. Nút này có cả trong dock và giao diện thường; chuyển thủ công không phát thông báo hết ca, còn việc tự chạy phiên mới theo hai công tắc bên trên.
+
+Cài đặt được lưu tự động sau khi đóng/mở app. Thay đổi thời lượng không đặt lại phiên đang chạy hoặc tạm dừng; áp dụng từ phiên tiếp theo (hoặc ngay cho phiên đang chờ bắt đầu). Khi máy ngủ rồi bật lại, timer bám thời gian thực và chỉ gửi thông báo hoàn thành gần nhất cho từng loại phiên.
+
+### Nhắc đổi ca toàn màn hình
+
+Bật **Settings → Nhắc đổi ca → Thông báo toàn màn hình** trong ứng dụng máy tính. Mỗi khi hết phiên tập trung hoặc nghỉ, bảng nhắc phủ toàn màn hình nơi con trỏ đang ở và ghim ở mức cao nhất của cửa sổ ứng dụng. Bảng nhắc đếm ngược **10 giây từ khi hiển thị** rồi mới bật nút **Đóng thông báo**; Escape hoặc Alt+F4 cũng chỉ đóng bảng sau thời gian này. Bảng không tự tắt.
+
+Bảng nhắc theo màu theme và lựa chọn kính hiện tại. Nó dùng cửa sổ riêng nên không thay đổi vị trí, kích thước, trạng thái ghim hoặc chế độ dock của app, và không tải lại nhạc. Timer tiếp tục hoặc chờ bắt đầu theo các tùy chọn tự chạy. Tùy chọn toàn màn hình mặc định tắt; khi tắt, app dùng thông báo thông thường. Sau khi máy ngủ qua nhiều phiên, chỉ bảng nhắc của lần đổi ca gần nhất xuất hiện.
 
 ### Nhạc nền
 1. Mở nút tìm nhạc ở thanh phát, nhập từ khóa hoặc dán link YouTube
@@ -91,6 +107,16 @@ Tìm kiếm cần kết nối Internet và đọc kết quả công khai từ Yo
 6. Xóa công việc đã hoàn thành bằng nút "Xóa đã hoàn thành"
 
 ## Lịch sử phiên bản
+
+### Chưa phát hành
+
+- Tách nghỉ ngắn/nghỉ dài, chọn số vòng trước nghỉ dài và tự bắt đầu riêng cho nghỉ/tập trung.
+- Đếm phiên tập trung hoàn thành; tạm dừng hoặc bỏ qua nghỉ mà vẫn giữ tiến độ vòng.
+- Skip hai chiều trên giao diện thường/dock; bỏ qua phiên tập trung vẫn cộng vòng.
+- Nhắc đổi ca toàn màn hình, ghim trên cùng và chỉ cho đóng sau 10 giây.
+- Dock nhớ vị trí riêng, thêm điều khiển timer và thay đổi kích thước 80–160% bằng Settings hoặc kéo trực tiếp.
+- Lưu cài đặt mới, giữ thời lượng cũ và bố cục Settings gọn ở cửa sổ 320×340.
+- Những thay đổi này nằm trong mã nguồn; bộ cài v1.3.0 đã tạo trước đó chưa bao gồm.
 
 ### v1.3.0 — 24/10/2026
 

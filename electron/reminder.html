@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <title>Pofi · Nhắc đổi ca</title>
+  <link rel="stylesheet" href="reminder.css" />
+</head>
+<body data-theme="warm">
+  <header><img src="../pofi_logo.png" alt="" /><span>pofi.</span></header>
+  <main aria-labelledby="reminder-title">
+    <p class="eyebrow" id="phase-label">MỘT NHỊP MỚI</p>
+    <h1 id="reminder-title">Dừng tay một chút.</h1>
+    <p class="message" id="reminder-message">Thả lỏng vai. Hít một hơi thật chậm.</p>
+    <p class="phase-detail" id="phase-detail"></p>
+    <div class="countdown" role="timer" aria-label="Thời gian chờ đóng thông báo"><span id="countdown">10</span><small>giây thảnh thơi</small></div>
+    <p class="hint" id="countdown-hint">Rời mắt khỏi công việc một chút, rồi mình tiếp tục.</p>
+    <button id="dismiss" type="button" disabled>Chờ 10 giây…</button>
+  </main>
+  <footer>một chút tập trung · một chút bình yên</footer>
+  <script src="reminder.js"></script>
+</body>
+</html>

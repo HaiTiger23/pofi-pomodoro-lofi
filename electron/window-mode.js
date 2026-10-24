@@ -1,4 +1,5 @@
 const DOCK_SIZE = { width: 320, height: 72 };
+const { validDockScale, windowLayout } = require('../shared/window-preferences');
 
 function fitBounds(bounds, area) {
   const width = Math.min(bounds.width, area.width), height = Math.min(bounds.height, area.height);
@@ -19,12 +20,20 @@ function pillShape(width, height) {
 }
 
 class WindowMode {
-  constructor(window, { workArea, shaped = ['win32', 'linux'].includes(process.platform) }) {
+  constructor(window, { workArea, shaped = ['win32', 'linux'].includes(process.platform), layout, scale = 100, onChange = () => {} }) {
     this.window = window;
     this.workArea = workArea;
     this.shaped = shaped && typeof window.setShape === 'function';
     this.dockMode = false;
     this.pending = Promise.resolve();
+    this.layout = windowLayout(layout);
+    this.scale = validDockScale(scale) ? Number(scale) : 100;
+    this.onChange = onChange;
+    this.switching = false;
+    if (this.layout.normal) {
+      window.setBounds(fitBounds(this.layout.normal, this.workArea(this.layout.normal)));
+      if (this.layout.maximized) window.maximize();
+    }
     this.refreshShape = () => {
       if (this.dockMode && this.shaped && !window.isDestroyed()) {
         try { window.setShape(pillShape(...window.getSize())); }
@@ -32,6 +41,34 @@ class WindowMode {
       }
     };
     window.on('resize', this.refreshShape);
+    this.remember = () => {
+      if (this.switching || window.isDestroyed()) return;
+      if (this.dockMode) {
+        this.dockBounds = window.getBounds();
+        this.layout.dock = { x: this.dockBounds.x, y: this.dockBounds.y };
+      } else {
+        this.layout.normal = window.getNormalBounds();
+        this.layout.maximized = window.isMaximized();
+      }
+      this.onChange();
+    };
+    for (const event of ['move','resize','maximize','unmaximize']) window.on(event, this.remember);
+  }
+  dockSize() { return { width: Math.round(DOCK_SIZE.width * this.scale / 100), height: Math.round(DOCK_SIZE.height * this.scale / 100) }; }
+  setDockScale(value) {
+    if (!validDockScale(value)) return Promise.reject(new TypeError('Invalid dock scale'));
+    this.pending = this.pending.catch(() => {}).then(() => {
+      if (this.window.isDestroyed()) return;
+      this.scale = Number(value);
+      if (this.dockMode) {
+        const desired = { ...this.window.getBounds(), ...this.dockSize() };
+        this.dockBounds = fitBounds(desired, this.workArea(desired));
+        this.window.setBounds(this.dockBounds);
+        this.refreshShape();
+      }
+      this.remember();
+    });
+    return this.pending;
   }
   setDockMode(enabled) {
     if (typeof enabled !== 'boolean') return Promise.reject(new TypeError('Invalid dock mode'));
@@ -42,26 +79,33 @@ class WindowMode {
   async switchMode(enabled) {
     const window = this.window;
     if (enabled === this.dockMode || window.isDestroyed()) return;
+    this.switching = true;
+    try {
     if (enabled) {
       const anchor = window.getBounds();
       this.saved = { bounds: window.getNormalBounds(), maximized: window.isMaximized(), minimum: window.getMinimumSize(), resizable: window.isResizable(), maximizable: window.isMaximizable(), pinned: window.isAlwaysOnTop() };
+      this.layout.normal = { ...this.saved.bounds };
+      this.layout.maximized = this.saved.maximized;
       if (this.saved.maximized) await new Promise((resolve, reject) => {
         const finish = () => { clearTimeout(timeout); window.removeListener('unmaximize', finish); window.isDestroyed() || window.isMaximized() ? reject(new Error('Cannot restore window')) : resolve(); };
         const timeout = setTimeout(finish, 1000);
         window.once('unmaximize', finish);
         window.unmaximize();
       });
-      window.setMinimumSize(260, DOCK_SIZE.height);
+      window.setMinimumSize(256, 58);
       window.setMaximizable(false);
       this.dockMode = true;
-      this.dockBounds = fitBounds({ x: anchor.x + (anchor.width - DOCK_SIZE.width) / 2, y: anchor.y + anchor.height - DOCK_SIZE.height, ...DOCK_SIZE }, this.workArea(anchor));
+      const size = this.dockSize();
+      const desired = this.layout.dock ? { ...this.layout.dock, ...size } : { x: anchor.x + (anchor.width - size.width) / 2, y: anchor.y + anchor.height - size.height, ...size };
+      this.dockBounds = fitBounds(desired, this.workArea(desired));
       window.setBounds(this.dockBounds);
       window.setResizable(false);
       window.setAlwaysOnTop(true);
       this.refreshShape();
     } else {
       const current = window.getBounds();
-      const desired = { ...this.saved.bounds, x: this.saved.bounds.x + current.x - this.dockBounds.x, y: this.saved.bounds.y + current.y - this.dockBounds.y };
+      this.layout.dock = { x: current.x, y: current.y };
+      const desired = this.saved.bounds;
       this.dockMode = false;
       if (this.shaped) {
         try { window.setShape([]); }
@@ -75,7 +119,11 @@ class WindowMode {
       if (this.saved.maximized) window.maximize();
       this.saved = null;
     }
+    } finally { this.switching = false; this.remember(); }
   }
-  dispose() { this.window.removeListener('resize', this.refreshShape); }
+  dispose() {
+    this.window.removeListener('resize', this.refreshShape);
+    for (const event of ['move','resize','maximize','unmaximize']) this.window.removeListener(event, this.remember);
+  }
 }
 module.exports = { WindowMode, DOCK_SIZE, fitBounds, pillShape };

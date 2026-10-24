@@ -95,3 +95,36 @@ test('glass preference is independent of palettes and background sources in lega
   assert.equal(normalize('liquid_glass', true), 'true');
   assert.deepEqual(migrateAppearance({ ui_theme: 'glass', liquid_glass: 'false' }), { ui_theme: 'night', liquid_glass: 'false' });
 });
+
+test('timer settings retain existing short breaks and persist new preferences across restarts', t => {
+  const file = fileFixture(t), store = new SettingsStorage(file);
+  let values = store.initialize({ duration_pomodoro: '25', break_pomodoro: '8' });
+  assert.equal(values.break_pomodoro, '8');
+  assert.equal(values.long_break_pomodoro, '15');
+  assert.equal(values.long_break_interval, '4');
+  assert.equal(values.auto_start_breaks, 'false');
+  assert.equal(values.auto_start_pomodoros, 'false');
+  store.set('long_break_pomodoro', 20); store.set('long_break_interval', 6);
+  store.set('auto_start_breaks', true); store.set('auto_start_pomodoros', true);
+  values = new SettingsStorage(file).initialize();
+  assert.deepEqual([values.break_pomodoro, values.long_break_pomodoro, values.long_break_interval, values.auto_start_breaks, values.auto_start_pomodoros], ['8', '20', '6', 'true', 'true']);
+  assert.equal(normalize('long_break_interval', '101'), '4');
+  assert.equal(normalize('long_break_interval', true), '4');
+  assert.equal(normalize('long_break_pomodoro', '-2'), '15');
+  assert.equal(normalize('auto_start_breaks', 'invalid'), 'false');
+});
+
+test('full-screen reminders and independent window positions persist with a validated dock size', t => {
+  const file = fileFixture(t), store = new SettingsStorage(file);
+  assert.equal(store.initialize().fullscreen_reminders, 'false');
+  const layout = { normal: { x: 10, y: 20, width: 460, height: 620 }, dock: { x: -900, y: 100 }, maximized: false };
+  store.set('fullscreen_reminders', true); store.set('dock_scale', 130); store.set('window_layout', layout);
+  const restored = new SettingsStorage(file).initialize();
+  assert.equal(restored.fullscreen_reminders, 'true');
+  assert.equal(restored.dock_scale, '130');
+  assert.deepEqual(JSON.parse(restored.window_layout), layout);
+  assert.equal(normalize('dock_scale', 170), '100');
+  assert.equal(normalize('dock_scale', true), '100');
+  assert.equal(normalize('window_layout', '{broken'), '{}');
+  assert.equal(normalize('window_layout', { normal: { x: 0, y: 0, width: -1, height: 620 }, dock: { x: Infinity, y: 0 } }), '{}');
+});

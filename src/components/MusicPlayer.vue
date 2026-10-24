@@ -1,5 +1,5 @@
 <template>
-  <div class="lofi-shell" :class="{ 'video-mode': showVideoAsBackground, 'dock-mode': dockMode }">
+  <div class="lofi-shell" :class="{ 'video-mode': showVideoAsBackground, 'dock-mode': dockMode }" :style="{ '--dock-scale': $store.state.dockScale / 100 }">
     <div class="scene-art" :class="{ 'youtube-background': backgroundMode !== 'scene' }" :style="{ backgroundImage: 'url(' + backgroundImage + ')' }"></div>
     <div class="video-layer" :class="{ 'is-visible': showVideoAsBackground }"><div ref="playerRoot"></div></div>
     <div class="scene-wash"></div>
@@ -29,7 +29,8 @@
         <p v-if="error" role="alert" class="inline-error">{{ error }} <button class="text-button" @click="playSong(current_music.videoId)">Thử lại</button></p>
       </section>
       <button v-if="dockMode" class="icon-button dock-expand" aria-label="Mở rộng ứng dụng" title="Mở rộng giao diện" @click="$emit('expand')"><i class="ri-fullscreen-line" aria-hidden="true"></i></button>
-      <span v-if="dockMode && dockError" class="dock-status-error" role="alert">{{ dockError }}</span>
+      <span v-if="dockMode" class="dock-resize-handle" role="slider" tabindex="0" aria-label="Kích thước dock" title="Kéo để đổi kích thước dock" aria-valuemin="80" aria-valuemax="160" :aria-valuenow="$store.state.dockScale" :aria-valuetext="$store.state.dockScale + '%'" @pointerdown="startDockResize" @pointermove="moveDockResize" @pointerup="endDockResize" @pointercancel="endDockResize" @lostpointercapture="endDockResize" @keydown="resizeDockKey"><i class="ri-draggable"></i></span>
+      <span v-if="dockMode && (dockError || resizeError)" class="dock-status-error" role="alert">{{ dockError || resizeError }}</span>
     </div>
     <DrawerPanel id="drawer-search" title="Tìm nhạc" icon="ri-search-line" :open="searchOpen" panel-class="search-panel" initial-focus=".search-form input" @close="searchOpen = false">
       <MusicSearch v-if="searchOpen" @select="selectSong" />
@@ -59,7 +60,7 @@ export default {
   data: () => ({
     searchOpen: false, videoStatusRun: false, videoStatus: false,
     current_music: { title: 'Đang tải video…', videoId: getItem('latestSong'), duration: 0, currentTime: 0 },
-    range: 0, volume: 100, oldVolume: 100, error: '', dragging: false
+    range: 0, volume: 100, oldVolume: 100, error: '', dragging: false, resizeError: '', dockResize: null
   }),
   mounted() {
     this.controller = new PlayerController({
@@ -83,12 +84,37 @@ export default {
     this.playSong(this.current_music.videoId);
     window.addEventListener('keydown', this.onKey);
   },
-  beforeUnmount() { this.controller.destroy(); window.removeEventListener('keydown', this.onKey); },
+  beforeUnmount() { this.controller.destroy(); window.removeEventListener('keydown', this.onKey); if (this.resizeFrame) cancelAnimationFrame(this.resizeFrame); },
   watch: {
     dockMode(enabled) { if (enabled) this.searchOpen = false; },
     volume(value) { if (this.controller) this.controller.setVolume(value).catch(this.handleControlError); }
   },
   methods: {
+    async applyDockScale(value) {
+      try { const state = await window.electronAPI.setDockScale(value); this.$store.commit('setDockScale', state.dockScale); this.resizeError = ''; }
+      catch { this.resizeError = 'Chưa đổi được kích thước dock.'; }
+    },
+    startDockResize(event) {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      this.dockResize = { x: event.screenX, scale: this.$store.state.dockScale };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    moveDockResize(event) {
+      if (!this.dockResize) return;
+      this.pendingDockScale = Math.max(80, Math.min(160, Math.round(this.dockResize.scale + (event.screenX - this.dockResize.x) / 3.2)));
+      if (this.resizeFrame) return;
+      this.resizeFrame = requestAnimationFrame(() => { this.resizeFrame = null; this.applyDockScale(this.pendingDockScale); });
+    },
+    endDockResize(event) {
+      this.dockResize = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    },
+    resizeDockKey(event) {
+      const values = { ArrowLeft: this.$store.state.dockScale - 5, ArrowDown: this.$store.state.dockScale - 5, ArrowRight: this.$store.state.dockScale + 5, ArrowUp: this.$store.state.dockScale + 5, Home: 80, End: 160 };
+      if (!(event.key in values)) return;
+      event.preventDefault(); this.applyDockScale(Math.max(80, Math.min(160, values[event.key])));
+    },
     closeSearch() { this.searchOpen = false; },
     onKey(event) { if (event.key === 'Escape') this.searchOpen = false; },
     selectSong(id) { this.playSong(id); this.searchOpen = false; },

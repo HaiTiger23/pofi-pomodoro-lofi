@@ -7,6 +7,8 @@ const { PomodoroTimer } = require('./electron/timer');
 const { SettingsStorage } = require('./electron/storage');
 const { YouTubeSearch, registerSearchRoute } = require('./electron/youtube-search');
 const { WindowMode } = require('./electron/window-mode');
+const { SessionReminder } = require('./electron/session-reminder');
+const { normalize } = require('./shared/validation');
 const youtubeSearch = new YouTubeSearch();
 
 let mainWindow;
@@ -15,14 +17,41 @@ let settings;
 let timer;
 let appOrigin;
 let windowMode;
+let sessionReminder;
+let latestCompletion;
+let windowSaveTimeout;
 const devUrl = !app.isPackaged && process.env.POFI_DEV_URL;
 
 function notify(title, body, type = 'info') {
   if (Notification.isSupported()) new Notification({ title, body, silent: true }).show();
+  playNotificationSound(type);
+}
+function playNotificationSound(type) {
   const filename = type === 'finish' ? 'success-fanfare-trumpets-6185.mp3' : 'simple-notification-152054.mp3';
   const base = app.isPackaged ? process.resourcesPath : __dirname;
   const audio = path.join(base, 'sounds', filename);
   if (fs.existsSync(audio)) sound.play(audio, 1).catch(() => console.warn('Không thể phát âm báo.'));
+}
+function completePhase(phase, detail) {
+  const body = phase === 'work' ? `Đã hoàn thành một vòng. Đến giờ ${detail.nextPhase === 'longBreak' ? 'nghỉ dài' : 'nghỉ ngắn'}.` : 'Đã hết thời gian nghỉ, hãy bắt đầu làm việc';
+  const type = phase === 'work' ? 'info' : 'finish';
+  if (settings.values.fullscreen_reminders !== 'true') { notify('Pofi', body, type); return; }
+  // A delayed tick can finish both work and rest. Present the latest transition
+  // once, instead of stacking full-screen windows after waking the computer.
+  latestCompletion = { body, type };
+  queueMicrotask(() => {
+    const completion = latestCompletion;
+    latestCompletion = null;
+    if (!completion || !mainWindow) return;
+    if (settings.values.fullscreen_reminders !== 'true') { notify('Pofi', completion.body, completion.type); return; }
+    const state = timer.snapshot(), s = timer.settings;
+    try {
+      sessionReminder.show({ ...state, ...completion, theme: settings.values.ui_theme, glass: settings.values.liquid_glass === 'true',
+        duration: state.phase === 'work' ? s.workMinutes : state.phase === 'longBreak' ? s.longBreakMinutes : s.shortBreakMinutes,
+        autoStarted: state.isRunning });
+      playNotificationSound(completion.type);
+    } catch { notify('Pofi', completion.body, completion.type); }
+  });
 }
 function publishTimer(state) {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -33,7 +62,22 @@ function publishTimer(state) {
   }
 }
 function windowState() {
-  return { pinned: mainWindow.isAlwaysOnTop(), maximized: mainWindow.isMaximized(), dockMode: Boolean(windowMode?.dockMode) };
+  return { pinned: mainWindow.isAlwaysOnTop(), maximized: mainWindow.isMaximized(), dockMode: Boolean(windowMode?.dockMode), dockScale: windowMode?.scale || 100 };
+}
+function saveWindowPreferences() {
+  clearTimeout(windowSaveTimeout);
+  windowSaveTimeout = null;
+  if (!windowMode) return;
+  settings.set('window_layout', windowMode.layout);
+  settings.set('dock_scale', windowMode.scale);
+}
+function windowPreferencesChanged() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('window-state', windowState());
+  clearTimeout(windowSaveTimeout);
+  windowSaveTimeout = setTimeout(() => {
+    try { saveWindowPreferences(); } catch { console.warn('Không thể lưu vị trí cửa sổ.'); }
+  }, 200);
 }
 function registerIPC() {
   const handle = (channel, callback) => ipcMain.handle(channel, (event, ...args) => {
@@ -41,7 +85,17 @@ function registerIPC() {
     return callback(...args);
   });
   handle('storage-initialize', legacy => settings.initialize(legacy));
-  handle('storage-set', (key, value) => settings.set(key, value));
+  handle('storage-set', (key, value) => {
+    const saved = settings.set(key, value);
+    if (key === 'fullscreen_reminders' && saved === 'false') sessionReminder.dispose();
+    return saved;
+  });
+  for (const [channel, callback] of [['reminder-get-state', () => sessionReminder.state()], ['reminder-dismiss', () => sessionReminder.dismiss()]]) {
+    ipcMain.handle(channel, event => {
+      if (!sessionReminder.isTrusted(event)) throw new Error('Untrusted renderer');
+      return callback();
+    });
+  }
   handle('search-youtube', async (query, cursor) => {
     try { return await youtubeSearch.searchPage(query, cursor); }
     catch (error) { return { error: error.message }; }
@@ -51,6 +105,11 @@ function registerIPC() {
     return mainWindow.isAlwaysOnTop();
   });
   handle('get-window-state', windowState);
+  handle('set-dock-scale', async value => {
+    await windowMode.setDockScale(value);
+    saveWindowPreferences();
+    return windowState();
+  });
   handle('set-dock-mode', async enabled => {
     await windowMode.setDockMode(enabled);
     const state = windowState();
@@ -69,8 +128,10 @@ function registerIPC() {
     setImmediate(() => { if (!window.isDestroyed()) window.close(); });
     return true;
   });
-  handle('configure-pomodoro-timer', (work, rest) => timer.configure(work, rest));
-  handle('start-pomodoro-timer', (work, rest) => timer.start(work, rest));
+  handle('configure-pomodoro-timer', (...settings) => timer.configure(...settings));
+  handle('start-pomodoro-timer', (...settings) => timer.start(...settings));
+  handle('skip-pomodoro-break', () => timer.skipBreak());
+  handle('skip-pomodoro-phase', () => timer.skipPhase());
   handle('stop-pomodoro-timer', () => timer.stop());
   handle('pause-pomodoro-timer', () => timer.pause());
   handle('resume-pomodoro-timer', () => timer.resume());
@@ -120,7 +181,9 @@ async function createWindow() {
     }
   });
   mainWindow = window;
-  windowMode = new WindowMode(window, { workArea: bounds => screen.getDisplayMatching(bounds).workArea });
+  windowMode = new WindowMode(window, { workArea: bounds => screen.getDisplayMatching(bounds).workArea,
+    layout: normalize('window_layout', settings.values.window_layout), scale: normalize('dock_scale', settings.values.dock_scale),
+    onChange: windowPreferencesChanged });
   if (process.platform !== 'darwin') window.removeMenu();
   for (const event of ['maximize', 'unmaximize', 'always-on-top-changed']) window.on(event, () => {
     if (!window.webContents.isDestroyed()) window.webContents.send('window-state', windowState());
@@ -130,7 +193,11 @@ async function createWindow() {
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (new URL(url).origin !== appOrigin) { event.preventDefault(); openExternal(url); }
   });
-  mainWindow.on('closed', () => { windowMode.dispose(); windowMode = null; mainWindow = null; });
+  mainWindow.on('closed', () => {
+    sessionReminder.dispose();
+    try { saveWindowPreferences(); } catch { console.warn('Không thể lưu vị trí cửa sổ.'); }
+    windowMode.dispose(); windowMode = null; mainWindow = null;
+  });
   await mainWindow.loadURL(appOrigin);
 }
 function revealWindow(window) {
@@ -144,22 +211,25 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    revealWindow(mainWindow);
+    if (sessionReminder?.window) sessionReminder.reveal();
+    else revealWindow(mainWindow);
   });
   app.whenReady().then(async () => {
     if (process.platform === 'win32') app.setAppUserModelId('com.pofi-hai-dev.id');
     if (process.platform === 'darwin') app.dock.setIcon(path.join(__dirname, 'pofi_logo.png'));
     settings = new SettingsStorage(path.join(app.getPath('userData'), 'settings.json'));
-    timer = new PomodoroTimer({ onChange: publishTimer, onComplete: phase => notify('Pofi', phase === 'work'
-      ? 'Đã hết thời gian làm việc, hãy nghỉ ngơi'
-      : 'Đã hết thời gian nghỉ, hãy bắt đầu làm việc', phase === 'work' ? 'info' : 'finish') });
+    sessionReminder = new SessionReminder({ createWindow: options => new BrowserWindow(options),
+      displayBounds: () => screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds,
+      onError: (_error, data) => notify('Pofi', data.body, data.type) });
+    timer = new PomodoroTimer({ onChange: publishTimer, onComplete: completePhase });
     registerIPC();
     appOrigin = devUrl ? new URL(devUrl).origin : await startServer();
     console.log(`Pofi running at ${appOrigin}`);
     powerMonitor.on('resume', () => timer.tick());
     await createWindow();
     app.on('activate', () => {
-      if (!mainWindow) createWindow().catch(reportStartupError);
+      if (sessionReminder.window) sessionReminder.reveal();
+      else if (!mainWindow) createWindow().catch(reportStartupError);
       else revealWindow(mainWindow);
     });
   }).catch(reportStartupError);
@@ -170,4 +240,8 @@ function reportStartupError(error) {
   app.quit();
 }
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-app.on('before-quit', () => { if (timer) timer.dispose(); if (httpServer) httpServer.close(); });
+app.on('before-quit', () => {
+  if (sessionReminder) sessionReminder.dispose();
+  try { saveWindowPreferences(); } catch { console.warn('Không thể lưu vị trí cửa sổ.'); }
+  if (timer) timer.dispose(); if (httpServer) httpServer.close();
+});

@@ -21,11 +21,16 @@ const NativeWindow = BrowserWindow;
 const Module = require('module');
 const originalLoad = Module._load;
 const electron = require('electron');
+const { PomodoroTimer } = require('../electron/timer');
+let timerForTest, timerOffset = 0;
 Module._load = function (request, parent, ...args) {
+  if (request === './electron/timer' && parent.filename === entry) return { PomodoroTimer: class extends PomodoroTimer {
+    constructor(options) { super({ ...options, now: () => Date.now() + timerOffset }); timerForTest = this; }
+  } };
   if (request === 'electron' && parent.filename === entry) return {
     ...electron,
     BrowserWindow: class extends NativeWindow {
-      constructor(options) { super({ ...options, show: false, webPreferences: { ...options.webPreferences, backgroundThrottling: false, offscreen: Boolean(process.env.POFI_SMOKE_SCREENSHOT) } }); }
+      constructor(options) { super({ ...options, fullscreen: false, show: false, webPreferences: { ...options.webPreferences, backgroundThrottling: false, offscreen: Boolean(process.env.POFI_SMOKE_SCREENSHOT) } }); }
       show() { /* Integration fixtures stay hidden when the real app reveals its window. */ }
       focus() { /* Do not take focus away from the user's application. */ }
     }
@@ -34,7 +39,7 @@ Module._load = function (request, parent, ...args) {
 };
 let finished = false;
 const playerErrors = [];
-const timeout = setTimeout(() => finish(new Error('Application smoke test timed out')), 60000);
+const timeout = setTimeout(() => finish(new Error('Application smoke test timed out')), 120000);
 function finish(error) {
   if (finished) return;
   finished = true;
@@ -47,6 +52,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 app.on('web-contents-created', (_event, contents) => {
   contents.on('console-message', (_event, level, message) => { if (level >= 2 && message.startsWith('YouTube player:')) playerErrors.push(message); });
   contents.once('did-finish-load', async () => {
+    if (contents.getURL().endsWith('/reminder.html')) return;
     try {
       const evaluate = code => contents.executeJavaScript(`(async () => (${code}))()`)
         .catch(error => { throw new Error(`Renderer check failed: ${code.slice(0, 100)}\n${error.message}`); });
@@ -130,6 +136,40 @@ app.on('web-contents-created', (_event, contents) => {
       assert.equal(await evaluate(`(await window.electronAPI.initializeStorage({})).duration_pomodoro`), '1');
       await evaluate(`(() => { const input=document.querySelector('#duration');input.value='-2';input.dispatchEvent(new Event('change',{bubbles:true})); })()`);
       assert.equal(await evaluate(`document.querySelector('#duration').value`), '1');
+      assert.equal(await evaluate(`document.querySelector('#long-break').value`), '15');
+      assert.equal(await evaluate(`document.querySelector('#long-break-interval').value`), '4');
+      assert.equal(await evaluate(`document.querySelector('#auto-start-breaks').checked`), false);
+      assert.equal(await evaluate(`document.querySelector('#auto-start-pomodoros').checked`), false);
+      assert.equal(await evaluate(`document.querySelector('#fullscreen-reminders').checked`), false);
+      await evaluate(`document.querySelector('#fullscreen-reminders').click()`);
+      await evaluate(`(() => {
+        for (const [id,value] of [['break','6'],['long-break','20'],['long-break-interval','2']]) {
+          const input=document.getElementById(id); input.value=value;input.dispatchEvent(new Event('change',{bubbles:true}));
+        }
+        document.querySelector('#auto-start-breaks').click();document.querySelector('#auto-start-pomodoros').click();
+      })()`);
+      await delay(150);
+      const preferences = await evaluate(`window.electronAPI.initializeStorage({})`);
+      assert.deepEqual([preferences.break_pomodoro, preferences.long_break_pomodoro, preferences.long_break_interval, preferences.auto_start_breaks, preferences.auto_start_pomodoros], ['6','20','2','true','true']);
+      assert.equal((await evaluate(`window.electronAPI.getPomodoroTimerStatus()`)).longBreakInterval, 2);
+      for (const [id,value,previous] of [['long-break','0','20'],['long-break-interval','101','2']]) {
+        await evaluate(`(() => {const input=document.getElementById('${id}');input.value='${value}';input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+        assert.equal(await evaluate(`document.getElementById('${id}').value`), previous);
+      }
+      await evaluate(`(() => {const input=document.querySelector('#long-break-interval');input.value='2';input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+      for (const width of [320,460]) {
+        NativeWindow.fromWebContents(contents).setSize(width, width === 320 ? 340 : 620);
+        await delay(200);
+        assert.equal(await evaluate(`(() => {
+          const panel=document.querySelector('#drawer-right-example'), body=panel.querySelector('.panel-body');
+          return document.documentElement.scrollWidth<=innerWidth && document.documentElement.scrollHeight<=innerHeight && body.scrollWidth<=body.clientWidth && [...panel.querySelectorAll('.timer-duration-grid .number-field')].every(el=>el.scrollWidth<=el.clientWidth);
+        })()`),true);
+        await evaluate(`(() => {const input=document.querySelector('#long-break-interval');input.value='100';input.dispatchEvent(new Event('change',{bubbles:true}));input.scrollIntoView({block:'center'});})()`);
+        await delay(100);
+        assert.equal(await evaluate(`(() => {const input=document.querySelector('#long-break-interval'),style=getComputedStyle(input),canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');ctx.font=style.font;return input.getBoundingClientRect().width>=ctx.measureText(input.value).width+20 && parseFloat(style.paddingLeft)===0 && parseFloat(style.paddingRight)===0;})()`),true);
+        if(process.env.POFI_SMOKE_SCREENSHOT) fs.writeFileSync(process.env.POFI_SMOKE_SCREENSHOT.replace('.png','-timer-settings-'+width+'.png'),(await contents.capturePage()).toPNG());
+        await evaluate(`(() => {const input=document.querySelector('#long-break-interval');input.value='2';input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+      }
       await evaluate(`window.electronAPI.startPomodoroTimer(1, 1)`);
       await delay(1250);
       let state = await evaluate(`window.electronAPI.getPomodoroTimerStatus()`);
@@ -145,6 +185,54 @@ app.on('web-contents-created', (_event, contents) => {
       assert.equal(state.status, 'ready');
       await delay(200);
       assert.equal(await evaluate(`document.querySelector('[data-testid="timer-caption"]').textContent`), 'Một việc thôi. Thật thong thả.');
+      await evaluate(`document.querySelector('[data-testid="timer-skip"]').click()`);
+      await delay(100);
+      state = await evaluate(`window.electronAPI.getPomodoroTimerStatus()`);
+      assert.equal(state.phase, 'shortBreak'); assert.equal(state.completedWork, 1);
+      assert.equal(await evaluate(`document.querySelector('.phase-pill').textContent.trim()`), 'Nghỉ ngắn');
+      assert.equal(NativeWindow.getAllWindows().length, 1);
+      await evaluate(`document.querySelector('[data-testid="timer-skip"]').click()`);
+      await delay(100);
+      assert.equal((await evaluate(`window.electronAPI.getPomodoroTimerStatus()`)).phase, 'work');
+      await evaluate(`window.electronAPI.stopPomodoroTimer()`);
+      // Exercise a natural completion through the real main process and isolated
+      // reminder preload. Fake only the timer clock; the ten-second lock is real.
+      const beforeReminder = NativeWindow.fromWebContents(contents).getBounds();
+      await evaluate(`window.electronAPI.startPomodoroTimer({ workMinutes:1, shortBreakMinutes:1, longBreakMinutes:1, longBreakInterval:2, autoStartBreaks:true, autoStartPomodoros:true })`);
+      timerOffset += 60000; timerForTest.tick();
+      let reminderWindow;
+      for (let attempt=0; attempt<100; attempt++) {
+        reminderWindow=NativeWindow.getAllWindows().find(window=>window.getTitle()==='Pofi · Nhắc đổi ca');
+        if(reminderWindow && !reminderWindow.webContents.isLoading()) break;
+        await delay(50);
+      }
+      assert.ok(reminderWindow);
+      const reminderEval = code => reminderWindow.webContents.executeJavaScript(code);
+      for(let attempt=0; attempt<40; attempt++) {
+        if(await reminderEval(`Boolean(document.querySelector('#dismiss'))`)) break;
+        await delay(50);
+      }
+      assert.equal(reminderWindow.isAlwaysOnTop(), true);
+      assert.equal(await reminderEval(`document.querySelector('#dismiss').disabled`), true);
+      assert.equal(await reminderEval(`window.pofiReminder.dismiss()`), false);
+      reminderWindow.close(); assert.equal(reminderWindow.isDestroyed(), false);
+      assert.match(await reminderEval(`document.querySelector('#reminder-title').textContent`), /nghỉ ngắn/);
+      if(process.env.POFI_SMOKE_SCREENSHOT) fs.writeFileSync(process.env.POFI_SMOKE_SCREENSHOT.replace('.png','-fullscreen-reminder.png'),(await reminderWindow.webContents.capturePage()).toPNG());
+      await delay(10100);
+      assert.equal(await reminderEval(`document.querySelector('#dismiss').disabled`), false);
+      await reminderEval(`document.querySelector('#dismiss').click()`);
+      await delay(100);
+      assert.equal(reminderWindow.isDestroyed(), true);
+      assert.deepEqual(NativeWindow.fromWebContents(contents).getBounds(), beforeReminder);
+      timerOffset += 60000; timerForTest.tick();
+      await delay(200);
+      reminderWindow=NativeWindow.getAllWindows().find(window=>window.getTitle()==='Pofi · Nhắc đổi ca');
+      assert.ok(reminderWindow);
+      assert.match(await reminderWindow.webContents.executeJavaScript(`document.querySelector('#reminder-title').textContent`), /quay lại/);
+      await evaluate(`document.querySelector('#fullscreen-reminders').click()`);
+      await delay(100);
+      assert.equal(reminderWindow.isDestroyed(), true);
+      await evaluate(`window.electronAPI.stopPomodoroTimer()`);
       assert.equal(fs.existsSync(path.join(profile, 'settings.json')), true);
       assert.deepEqual(playerErrors, []);
       await evaluate(`(() => {const input=document.querySelector('#duration');input.value='45';input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
@@ -204,6 +292,9 @@ app.on('web-contents-created', (_event, contents) => {
       }
       assert.equal(await evaluate(`document.documentElement.dataset.theme`), 'garden');
       assert.equal(await evaluate(`document.documentElement.dataset.glass`), 'true');
+      assert.equal(await evaluate(`document.querySelector('#long-break').value`), '20');
+      assert.equal(await evaluate(`document.querySelector('#long-break-interval').value`), '2');
+      assert.equal(await evaluate(`document.querySelector('#auto-start-breaks').checked && document.querySelector('#auto-start-pomodoros').checked`), true);
       await clickNavigation("[aria-label=\"Chọn giao diện\"]");
       await delay(250);
       assert.equal(await evaluate(`document.querySelector('#drawer-themes-title').textContent`), 'Giao diện & nền');
@@ -313,12 +404,25 @@ app.on('web-contents-created', (_event, contents) => {
           noScroll:document.documentElement.scrollWidth<=innerWidth&&document.documentElement.scrollHeight<=innerHeight,
           drag:getComputedStyle(document.querySelector('.app-layout')).getPropertyValue('-webkit-app-region')};
       })()`);
-      assert.deepEqual(dockContents, {buttons:2,fits:true,noScroll:true,drag:'drag'});
+      assert.deepEqual(dockContents, {buttons:4,fits:true,noScroll:true,drag:'drag'});
+      assert.equal(await evaluate(`(() => {const start=document.querySelector('[data-testid="timer-start"]').getBoundingClientRect(),skip=document.querySelector('[data-testid="timer-skip"]').getBoundingClientRect(),music=document.querySelector('.play-button').getBoundingClientRect();return start.width>0 && start.right<=skip.left && skip.right<=music.left;})()`), true);
       await delay(1200);
       const inDock = await evaluate(`window.electronAPI.getPomodoroTimerStatus()`);
       assert.equal(inDock.status, 'running');
       assert.ok(inDock.minutes*60+inDock.seconds < beforeDock.minutes*60+beforeDock.seconds);
       if (process.env.POFI_SMOKE_SCREENSHOT) fs.writeFileSync(process.env.POFI_SMOKE_SCREENSHOT.replace('.png', '-mini-dock.png'), (await contents.capturePage()).toPNG());
+      for (const scale of [80,130,160,100]) {
+        await evaluate(`window.electronAPI.setDockScale(${scale})`);
+        await delay(150);
+        assert.deepEqual(owner.getSize(), [Math.round(320*scale/100),Math.round(72*scale/100)]);
+        assert.equal(await evaluate(`(() => {const elements=[...document.querySelectorAll('.timer-actions button'),document.querySelector('.timer-digits'),document.querySelector('.play-button'),document.querySelector('.dock-expand')];return elements.every(el=>{const r=el.getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1;})&&document.documentElement.scrollWidth<=innerWidth})()`),true);
+        if(process.env.POFI_SMOKE_SCREENSHOT) fs.writeFileSync(process.env.POFI_SMOKE_SCREENSHOT.replace('.png','-dock-'+scale+'.png'),(await contents.capturePage()).toPNG());
+      }
+      await evaluate(`document.querySelector('.dock-resize-handle').dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}))`);
+      await delay(150); assert.deepEqual(owner.getSize(),[512,115]);
+      await evaluate(`window.electronAPI.setDockScale(100)`);
+      owner.setPosition(300,500);
+      const movedDock = owner.getBounds();
       await evaluate(`window.electronAPI.setDockMode(true)`);
       await evaluate(`document.querySelector('[aria-label="Mở rộng ứng dụng"]').click()`);
       await delay(300);
@@ -326,6 +430,15 @@ app.on('web-contents-created', (_event, contents) => {
       assert.equal(owner.isAlwaysOnTop(), false);
       assert.equal(await evaluate(`window.pofiDockFrame === document.querySelector('.video-layer iframe')`), true);
       assert.equal((await evaluate(`window.electronAPI.getPomodoroTimerStatus()`)).status, 'running');
+      await evaluate(`window.electronAPI.setDockMode(true)`);
+      assert.deepEqual(owner.getBounds(), movedDock);
+      await evaluate(`document.querySelector('[data-testid="timer-start"]').click()`);
+      await delay(100); assert.equal((await evaluate(`window.electronAPI.getPomodoroTimerStatus()`)).status,'pause');
+      await evaluate(`document.querySelector('[data-testid="timer-skip"]').click()`);
+      await delay(100); state=await evaluate(`window.electronAPI.getPomodoroTimerStatus()`);
+      assert.equal(state.phase,'shortBreak');assert.equal(state.completedWork,1);
+      await evaluate(`window.electronAPI.setDockMode(false)`);
+      assert.deepEqual(owner.getBounds(),originalBounds);
       // Preserve an existing pin and a maximized window when expanding the dock.
       await evaluate(`window.electronAPI.togglePinWindow(true)`);
       owner.maximize();

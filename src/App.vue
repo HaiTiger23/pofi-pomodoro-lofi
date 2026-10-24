@@ -81,6 +81,7 @@ export default {
     applyWindowState(state) {
       this.$store.commit('setPinned', state.pinned);
       this.$store.commit('setDockMode', state.dockMode);
+      this.$store.commit('setDockScale', state.dockScale);
       if (state.dockMode) { this.drawer = null; this.closeNavigation(); }
     },
     async expandDock() {

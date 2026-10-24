@@ -1,35 +1,43 @@
-const { validDuration } = require('../shared/validation');
+const { TIMER_DEFAULTS, validateTimerSettings } = require('../shared/validation');
 
 // The deadline is authoritative; delayed callbacks never extend a session.
 class PomodoroTimer {
   constructor({ now = Date.now, schedule = (callback, delay) => setInterval(callback, delay), cancel = id => clearInterval(id), onChange = () => {}, onComplete = () => {} } = {}) {
     Object.assign(this, { now, schedule, cancel, onChange, onComplete });
-    this.workMinutes = 45;
-    this.breakMinutes = 5;
+    this.settings = { ...TIMER_DEFAULTS };
+    this.phase = 'work';
+    this.completedWork = 0;
     this.status = 'ready';
     this.deadline = null;
-    this.remaining = this.workMinutes * 60000;
+    this.remaining = this.phaseDuration();
     this.interval = null;
   }
   configure(work, rest) {
-    if (!validDuration(work) || !validDuration(rest)) throw new Error('Thời lượng phải là số nguyên từ 1 đến 1440 phút.');
-    this.workMinutes = Number(work);
-    this.breakMinutes = Number(rest);
-    if (this.status === 'ready') this.remaining = this.workMinutes * 60000;
+    if (work && typeof work === 'object' && (Array.isArray(work) || !Object.keys(work).length)) throw new Error('Cài đặt bộ đếm không hợp lệ.');
+    const changes = work && typeof work === 'object' ? work : { workMinutes: work, shortBreakMinutes: rest };
+    const settings = validateTimerSettings({ ...this.settings, ...changes });
+    this.settings = settings;
+    if (this.status === 'ready') this.remaining = this.phaseDuration();
     return this.publish();
   }
-  start(work = this.workMinutes, rest = this.breakMinutes) {
-    this.configure(work, rest);
+  phaseDuration() {
+    return this.settings[{ work: 'workMinutes', shortBreak: 'shortBreakMinutes', longBreak: 'longBreakMinutes' }[this.phase]] * 60000;
+  }
+  runPhase(startAt) {
+    this.status = this.phase === 'work' ? 'running' : 'break';
+    this.deadline = startAt + this.remaining;
+    if (this.interval === null) this.interval = this.schedule(() => this.tick(), 250);
+  }
+  start(...settings) {
+    if (settings.length) this.configure(...settings);
     this.clear();
-    this.status = 'running';
-    this.remaining = this.workMinutes * 60000;
-    this.deadline = this.now() + this.remaining;
-    this.interval = this.schedule(() => this.tick(), 250);
+    this.remaining = this.phaseDuration();
+    this.runPhase(this.now());
     return this.publish();
   }
   pause() {
     this.tick();
-    if (this.status === 'running') {
+    if (this.deadline !== null) {
       this.remaining = Math.max(0, this.deadline - this.now());
       this.deadline = null;
       this.status = 'pause';
@@ -39,10 +47,7 @@ class PomodoroTimer {
   }
   resume() {
     if (this.status === 'pause') {
-      this.deadline = this.now() + this.remaining;
-      this.status = 'running';
-      this.clear();
-      this.interval = this.schedule(() => this.tick(), 250);
+      this.runPhase(this.now());
     }
     return this.publish();
   }
@@ -50,28 +55,69 @@ class PomodoroTimer {
     this.clear();
     this.deadline = null;
     this.status = 'ready';
-    this.remaining = this.workMinutes * 60000;
+    this.phase = 'work';
+    this.completedWork = 0;
+    this.remaining = this.phaseDuration();
+    return this.publish();
+  }
+  nextPhase(phase, startAt, autoStart) {
+    this.phase = phase;
+    this.remaining = this.phaseDuration();
+    this.deadline = null;
+    this.status = 'ready';
+    if (autoStart) this.runPhase(startAt);
+    else this.clear();
+  }
+  skipBreak() {
+    if (this.phase !== 'work') this.nextPhase('work', this.now(), this.settings.autoStartPomodoros);
+    return this.publish();
+  }
+  skipPhase() {
+    if (this.phase === 'work') {
+      this.completedWork++;
+      this.nextPhase(this.completedWork % this.settings.longBreakInterval === 0 ? 'longBreak' : 'shortBreak', this.now(), this.settings.autoStartBreaks);
+    } else this.nextPhase('work', this.now(), this.settings.autoStartPomodoros);
     return this.publish();
   }
   tick() {
-    if (this.deadline !== null && this.now() >= this.deadline) {
-      if (this.status === 'running') {
-        this.deadline += this.breakMinutes * 60000;
-        this.status = 'break';
-        this.onComplete('work');
+    const now = this.now(), notifications = new Map();
+    const remember = (phase, autoStarted) => {
+      const kind = phase === 'work' ? 'work' : 'break';
+      notifications.delete(kind);
+      notifications.set(kind, { phase, nextPhase: this.phase, completedWork: this.completedWork, autoStarted });
+    };
+    while (this.deadline !== null && now >= this.deadline) {
+      // Skip complete cycles after sleep in constant time. Only the latest work
+      // and break completion are notified, avoiding a backlog of alerts.
+      const s = this.settings;
+      if (this.phase === 'work' && s.autoStartBreaks && s.autoStartPomodoros) {
+        const cycleMs = (s.workMinutes * s.longBreakInterval + s.shortBreakMinutes * (s.longBreakInterval - 1) + s.longBreakMinutes) * 60000;
+        const cycles = Math.floor((now - this.deadline) / cycleMs);
+        if (cycles > 0) {
+          this.completedWork += cycles * s.longBreakInterval;
+          this.deadline += cycles * cycleMs;
+          remember('work', true);
+          remember(this.completedWork % s.longBreakInterval === 0 ? 'longBreak' : 'shortBreak', true);
+        }
       }
-      if (this.status === 'break' && this.now() >= this.deadline) {
-        this.stop();
-        this.onComplete('break');
-      }
+      const endedAt = this.deadline, finished = this.phase;
+      if (finished === 'work') {
+        this.completedWork++;
+        this.nextPhase(this.completedWork % s.longBreakInterval === 0 ? 'longBreak' : 'shortBreak', endedAt, s.autoStartBreaks);
+      } else this.nextPhase('work', endedAt, s.autoStartPomodoros);
+      remember(finished, this.deadline !== null);
     }
-    return this.publish();
+    const state = this.publish();
+    for (const [kind, detail] of notifications) this.onComplete(kind, detail);
+    return state;
   }
   snapshot() {
     const totalSeconds = Math.ceil(Math.max(0, this.deadline === null ? this.remaining : this.deadline - this.now()) / 1000);
     return {
       status: this.status, minutes: Math.floor(totalSeconds / 60), seconds: totalSeconds % 60,
-      isBreak: this.status === 'break', isRunning: ['running', 'break'].includes(this.status)
+      phase: this.phase, isBreak: this.phase !== 'work', isRunning: this.deadline !== null,
+      completedWork: this.completedWork, longBreakInterval: this.settings.longBreakInterval,
+      round: this.phase === 'work' ? this.completedWork % this.settings.longBreakInterval + 1 : (this.completedWork % this.settings.longBreakInterval || this.settings.longBreakInterval)
     };
   }
   publish() { const state = this.snapshot(); this.onChange(state); return state; }
