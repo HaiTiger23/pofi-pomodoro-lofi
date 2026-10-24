@@ -27,12 +27,14 @@ app.on('web-contents-created',(_event,contents)=>contents.once('did-finish-load'
    }
    await commit('setBackgroundMode','scene');await delay(300);
    const point=await evaluate(`(()=>{const r=document.querySelector('[data-testid="timer-start"]').getBoundingClientRect();return {x:Math.round(r.left+r.width*.8),y:Math.round(r.top+r.height*.3)};})()`);
-   const appearance=()=>evaluate(`[...document.querySelectorAll('.pofi-glass-surface')].map(el=>{const c=getComputedStyle(el);return [c.transform,c.filter,c.backgroundColor,c.color,c.boxShadow,getComputedStyle(el,'::before').backgroundImage,el.getAttribute('style')];})`);
+   const appearance=()=>evaluate(`[...document.querySelectorAll('.pofi-glass-surface')].map(el=>{const c=getComputedStyle(el);return [c.transform,c.filter,c.backgroundColor,c.color,c.boxShadow,c.backgroundImage,getComputedStyle(el,'::before').backgroundImage,el.getAttribute('style')];})`);
    const before=await appearance();
    contents.sendInputEvent({type:'mouseMove',...point});await delay(200);
-   assert.deepEqual(await appearance(),before,'Glass must stay static on hover');
+   const hovered=await appearance();
+   assert.notDeepEqual(hovered,before,'Buttons provide subtle hover feedback');
+   assert.deepEqual(hovered.map(s=>s[0]),before.map(s=>s[0]),'Hover must not move or stretch glass');
    contents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...point});await delay(100);
-   assert.deepEqual(await appearance(),before,'Glass must stay static while pressed');
+   assert.deepEqual(await appearance(),hovered,'Press must not move or stretch glass');
    contents.sendInputEvent({type:'mouseMove',x:1,y:1});
    contents.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,x:1,y:1});
    fs.writeFileSync(path.join(output,`glass-refractive-${theme}.png`),(await contents.capturePage()).toPNG());
@@ -77,7 +79,7 @@ app.on('web-contents-created',(_event,contents)=>contents.once('did-finish-load'
   assert.ok(edgeChanges>40,'The actual background must bend, not only tint or blur');
   assert.equal(centerChanges,0,'The optical layer must leave its center and text unchanged');
   await evaluate(`document.querySelector('.focus-space>.pofi-glass-warp').style.filter=${JSON.stringify(filter)}`);
-  console.log('PASS: real edge refraction, sharp center/text, no hover/press/pointer effects, cleanup, 3 themes/3 backgrounds, compact/dock');
+  console.log('PASS: real edge refraction, sharp center/text, subtle hover without movement or pointer tracking, cleanup, 3 themes/3 backgrounds, compact/dock');
   clearTimeout(timeout);app.exit(0);
  }catch(error){console.error(error);clearTimeout(timeout);app.exit(1);}
 }));

@@ -44,7 +44,7 @@ Nút chọn giao diện ở thanh trên cùng có ba theme: **Góc ấm**, **Đ�
 
 Khi mở app, bài nhạc đã lưu được nạp ở trạng thái dừng; bấm phát hoặc chọn bài để nghe.
 
-Khi bật kính, có thêm **Kính tối · Dùng cho nền sáng**: phủ sắc khói lên card/nút và chuyển chữ trên kính sang màu sáng. Tùy chọn được lưu riêng, dùng cùng mọi nền. Kính dùng hiệu ứng tĩnh; không hút, kéo giãn, phản sáng theo chuột hay đổi hiệu ứng khi hover/nhấn.
+Khi bật kính, có thêm **Kính tối · Dùng cho nền sáng**: phủ sắc khói lên card/nút và chuyển chữ trên kính sang màu sáng. Tùy chọn được lưu riêng, dùng cùng mọi nền. Kính đứng yên, không hút, kéo giãn hay phản sáng theo chuột. Button và input có hover nhẹ ở sắc nền/viền; ô nhập sáng viền khi focus.
 
 Hiệu ứng mới tham khảo [liquid-glass-react của rdev](https://github.com/rdev/liquid-glass-react): nền khúc xạ ở mép kính, viền tán sắc nhẹ và phản sáng cố định. Chữ/đồng hồ giữ nét; bảng tìm nhạc vẫn có nền rõ. Hiệu ứng chạy trên Vue, hỗ trợ mọi kiểu nền. [Giấy phép tham khảo MIT](public/licenses/liquid-glass-react.txt) được đóng kèm ứng dụng.
 

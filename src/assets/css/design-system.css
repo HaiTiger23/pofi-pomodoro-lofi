@@ -326,8 +326,29 @@ input.progress-range::-webkit-slider-thumb { appearance:none; width:7px; height:
 [data-glass="true"][data-glass-dark="true"] .pofi-glass-warp { --glass-blur:8px; }
 [data-theme="garden"][data-glass="true"][data-glass-dark="true"] .pofi-glass-surface { --accent:#c5dbb7; --accent-ink:#243421; --accent-soft:rgba(197,219,183,.16); }
 [data-glass="true"][data-glass-dark="true"] :is(.primary-button,.play-button) { color:var(--accent-ink); }
-/* Glass is a static material: pointer input never animates controls. */
+/* Fixed glass geometry, with subtle feedback only on interactive controls. */
 [data-glass="true"] button:active:not(:disabled) { transform:none; }
+[data-glass="true"] :is(button,.text-field,.number-field,select,.switch-input) {
+  transition:background-color .16s,border-color .16s,box-shadow .16s;
+}
+@media(hover:hover) {
+  [data-glass="true"] button:hover:not(:disabled) {
+    background-image:linear-gradient(rgba(255,255,255,.09),rgba(255,255,255,.09));
+    border-color:color-mix(in srgb,var(--accent) 50%,var(--line));
+  }
+  [data-glass="true"] :is(.text-field,select,.number-field):hover,
+  [data-glass="true"] .switch-input:hover:not(:disabled) {
+    border-color:color-mix(in srgb,var(--accent) 55%,var(--line));
+    background-color:color-mix(in srgb,var(--field) 93%,var(--accent));
+  }
+  [data-glass="true"] input[type="range"]:hover:not(:disabled)::-webkit-slider-thumb { box-shadow:0 0 0 3px var(--accent-soft); }
+  [data-glass="true"] .window-controls .window-close:hover { background:#be414c; color:#fff; border-color:transparent; }
+}
+[data-glass="true"] :is(.text-field,select):focus-visible,
+[data-glass="true"] .number-field:focus-within { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
+@media(prefers-reduced-motion:reduce) {
+  [data-glass="true"] :is(button,.text-field,.number-field,select,.switch-input) { transition:none; }
+}
 
 @media(max-width:640px) {
   .app-layout { padding:10px; gap:8px; }
