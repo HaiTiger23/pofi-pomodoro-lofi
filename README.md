@@ -98,6 +98,8 @@ Bảng tìm nhạc có nền rõ để dễ đọc cả khi bật hiệu ứng k
 
 Tìm kiếm cần kết nối Internet và đọc kết quả công khai từ YouTube qua tiến trình Electron (hoặc endpoint cục bộ khi chạy trình duyệt). Nếu YouTube chặn truy cập hay thay đổi định dạng kết quả, app hiển thị lỗi; bạn vẫn có thể dán link video để phát.
 
+Trình phát tải SDK qua HTTPS. Nếu lần tải đầu bị lỗi mạng hoặc quá thời gian, **Thử lại** tạo yêu cầu mới, không giữ trạng thái lỗi cho các bài sau. App phân biệt lỗi kết nối, video bị xóa/riêng tư và video không cho nhúng; khi trình duyệt chặn tự phát, nút play vẫn dùng được để bắt đầu thủ công.
+
 ### Quản lý công việc
 1. Nhấp vào biểu tượng danh sách công việc ở góc trên bên phải
 2. Nhập tên công việc và chọn mức độ ưu tiên
@@ -110,6 +112,7 @@ Tìm kiếm cần kết nối Internet và đọc kết quả công khai từ Yo
 
 ### Chưa phát hành
 
+- Sửa tải player qua HTTP và lỗi lần tải đầu làm các lần thử sau bị kẹt; tải SDK bằng HTTPS, hỗ trợ thử lại và báo lỗi phát cụ thể.
 - Tách nghỉ ngắn/nghỉ dài, chọn số vòng trước nghỉ dài và tự bắt đầu riêng cho nghỉ/tập trung.
 - Đếm phiên tập trung hoàn thành; tạm dừng hoặc bỏ qua nghỉ mà vẫn giữ tiến độ vòng.
 - Skip hai chiều trên giao diện thường/dock; bỏ qua phiên tập trung vẫn cộng vòng.

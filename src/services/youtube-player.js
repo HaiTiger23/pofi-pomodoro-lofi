@@ -25,13 +25,22 @@ class PlayerController {
     });
     this.player = player;
     const current = () => this.player === player && this.generation === generation;
-    const fail = () => {
+    const fail = error => {
       if (!current()) return;
       this.release();
       this.onUpdate({ ready: false, playing: false });
-      this.onError('Không thể tải video. Kiểm tra kết nối hoặc chọn video khác.');
+      const code = Number(error?.data);
+      const messages = {
+        2: 'Link hoặc mã video không hợp lệ. Hãy chọn lại bài hát.',
+        5: 'YouTube không phát được video này. Bấm Thử lại để tải lại trình phát.',
+        100: 'Video đã bị xóa hoặc chuyển riêng tư. Hãy chọn bài khác.',
+        101: 'Chủ video không cho phát trong ứng dụng. Hãy chọn bài khác.',
+        150: 'Chủ video không cho phát trong ứng dụng. Hãy chọn bài khác.',
+        153: 'YouTube chưa xác nhận được trình phát. Hãy mở lại ứng dụng rồi thử lại.'
+      };
+      this.onError(messages[code] || (['API_NETWORK','API_TIMEOUT'].includes(error?.code) ? error.message : 'Không thể kết nối trình phát YouTube. Kiểm tra mạng rồi bấm Thử lại.'));
     };
-    this.timeout = this.later(fail, 20000);
+    this.timeout = this.later(fail, 30000);
     this.listeners.push(player.on('ready', async () => {
       if (!current()) return;
       this.cancelLater(this.timeout);
@@ -53,6 +62,12 @@ class PlayerController {
       this.stopPolling();
       if (this.playing) this.startPolling();
       if (event.data === 0) this.onEnd();
+    }));
+    this.listeners.push(player.on('autoplayBlocked', () => {
+      if (!current()) return;
+      this.playing = false;
+      this.stopPolling();
+      this.onUpdate({ playing: false });
     }));
     this.listeners.push(player.on('error', fail));
   }

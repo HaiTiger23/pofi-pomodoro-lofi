@@ -85,3 +85,30 @@ test('ambient players muted before ready do not autoplay', async () => {
   assert.equal(f.players[0].plays, 0);
   f.controller.destroy();
 });
+
+test('player distinguishes blocked videos from network and embed identity errors', () => {
+  for (const [data, expected] of [[100,/xóa|riêng tư/],[101,/không cho phát/],[150,/không cho phát/],[153,/xác nhận/],[2,/không hợp lệ/]]) {
+    const f = fixture(); f.controller.load('DnewVhYNt-I');
+    f.players[0].emit('error', { data });
+    assert.match(f.errors[0], expected);
+    assert.equal(f.players[0].destroyed, true);
+    assert.equal(f.timeouts.size, 0);
+  }
+  const f = fixture(); f.controller.load('DnewVhYNt-I');
+  f.players[0].emit('error', Object.assign(new Error('SDK không kết nối'), { code: 'API_NETWORK' }));
+  assert.equal(f.errors[0], 'SDK không kết nối');
+});
+
+test('blocked autoplay keeps the ready player available for a manual play click', async () => {
+  const f = fixture(); f.controller.load('DnewVhYNt-I');
+  await f.players[0].emit('ready');
+  f.players[0].emit('stateChange', { data: 1 });
+  f.players[0].emit('autoplayBlocked', {});
+  assert.equal(f.controller.ready, true);
+  assert.equal(f.controller.playing, false);
+  assert.equal(f.intervals.size, 0);
+  await f.controller.toggle();
+  assert.equal(f.players[0].plays, 2);
+  assert.deepEqual(f.errors, []);
+  f.controller.destroy();
+});

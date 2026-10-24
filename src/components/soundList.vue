@@ -4,7 +4,7 @@
   <div ref="players" class="ambient-players" aria-hidden="true"></div>
 </template>
 <script>
-import YouTubePlayer from 'youtube-player';
+import { createYouTubePlayer } from '../services/youtube-api';
 import { PlayerController } from '../services/youtube-player';
 export default {
   data: () => ({
@@ -25,7 +25,7 @@ export default {
         const root = document.createElement('div');
         this.$refs.players.appendChild(root);
         controller = new PlayerController({
-          create: YouTubePlayer, root,
+          create: createYouTubePlayer, root,
           shouldPlay: () => sound.volume > 0,
           onEnd: () => {
             if (sound.volume > 0) controller.seek(0).then(() => controller.player && controller.player.playVideo()).catch(() => {});

@@ -39,7 +39,7 @@
   </div>
 </template>
 <script>
-import YouTubePlayer from 'youtube-player';
+import { createYouTubePlayer } from '../services/youtube-api';
 import { PlayerController } from '../services/youtube-player';
 import MusicSearch from './MusicSearch.vue';
 import DrawerPanel from './DrawerPanel.vue';
@@ -64,7 +64,7 @@ export default {
   }),
   mounted() {
     this.controller = new PlayerController({
-      create: YouTubePlayer, root: this.$refs.playerRoot,
+      create: createYouTubePlayer, root: this.$refs.playerRoot,
       onUpdate: state => {
         if ('ready' in state) this.videoStatus = state.ready;
         if ('playing' in state) this.videoStatusRun = state.playing;
@@ -79,7 +79,7 @@ export default {
         this.$store.commit('addToHistory', { ...song, channelTitle: 'YouTube', timestamp: new Date().toISOString() });
       },
       onEnd: () => this.playSong(this.getRandomVideoId()),
-      onError: message => { this.error = message; this.current_music.title = 'Video không khả dụng'; }
+      onError: message => { this.error = message; if (this.current_music.title === 'Đang tải video…') this.current_music.title = 'Chưa tải được bài hát'; }
     });
     this.playSong(this.current_music.videoId);
     window.addEventListener('keydown', this.onKey);
