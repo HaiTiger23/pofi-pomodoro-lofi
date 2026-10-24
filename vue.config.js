@@ -1,9 +1,11 @@
 const { defineConfig } = require('@vue/cli-service')
+const { registerSearchRoute } = require('./electron/youtube-search')
 module.exports = defineConfig({
   transpileDependencies: true,
-  pluginOptions: {
-    electronBuilder: {
-      preload: 'preload.js',
+  devServer: {
+    setupMiddlewares(middlewares, server) {
+      registerSearchRoute(server.app)
+      return middlewares
     }
   }
 })

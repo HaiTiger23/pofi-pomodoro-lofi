@@ -3,6 +3,7 @@ node_modules
 /dist
 /dist_electron/**
 /package
+/.test-output/
 
 
 # local env files

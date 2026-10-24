@@ -1,129 +1,58 @@
-<template >
-  <button
-    type="button" 
-    @click="isOpenDrop = !isOpenDrop"
-    class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700"
-  >
-    <i class="ri-time-line"></i>
-    <span class="flex-1 ml-3 text-left whitespace-nowrap" sidebar-toggle-item
-      >Sound</span
-    >
-    <i :class="{'ri-arrow-down-s-line':!isOpenDrop, 
-                'ri-arrow-up-s-line':isOpenDrop, 
-                ' font-bold text-[20px]':true}"></i>
-  </button>
-  <ul v-if="isAllSoundReady" id="dropdown-sound"  :class="{'hidden':!isOpenDrop, 'py-2 space-y-2':true}">
-    <li v-for="sound in listSound" :key="sound.videoID">
-      <label
-        for="helper-text"
-        class="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-        >{{ sound.title }}</label
-      >
-      <div class="flex">
-        <i @click="muteVolume(sound)" :class="{'ri-volume-up-line':sound.volume > 50,'ri-volume-down-line':sound.volume < 50,'ri-volume-mute-line':sound.volume == 0 ,'text-white  p-1 cursor-pointer transition-all duration-100 ease-linear':true}"></i>
-        <input
-        v-on:change="changeVolume($event, sound)"
-        type="range"
-        v-model="sound.volume"
-        
-        max="100"
-        min="0"
-        :id="sound.videoID"
-        aria-describedby="helper-text-explanation"
-        class="w-full"
-      />
-      </div>
-    </li>
-  </ul>
-  <div class="hidden" id="iframeSound"></div>
+<template>
+  <div class="ambient-section"><button type="button" class="section-heading ambient-heading" :aria-expanded="isOpen" @click="isOpen = !isOpen"><i class="ri-rainy-line"></i><h3>Âm thanh thiên nhiên</h3><i :class="isOpen ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'"></i></button><p class="field-hint">Pha chút âm thanh cho không gian của bạn.</p>
+  <div v-show="isOpen" class="ambient-list"><div v-for="sound in sounds" :key="sound.videoId" class="ambient-row"><button class="icon-button" :class="{ active: sound.volume > 0 }" :aria-label="(sound.volume ? 'Tắt ' : 'Bật ') + sound.title" :aria-pressed="sound.volume > 0" @click="toggle(sound)"><i :class="sound.icon"></i></button><label :for="sound.videoId">{{ sound.title }}</label><input :id="sound.videoId" type="range" min="0" max="100" :value="sound.volume" @input="changeVolume(sound, $event.target.value)" :aria-label="'Âm lượng ' + sound.title" /><span>{{ sound.volume }}%</span><p v-if="sound.error" role="alert" class="inline-error">{{ sound.error }}</p></div></div></div>
+  <div ref="players" class="ambient-players" aria-hidden="true"></div>
 </template>
-
 <script>
-import YouTubePlayer from "youtube-player";
+import YouTubePlayer from 'youtube-player';
+import { PlayerController } from '../services/youtube-player';
 export default {
-  data() {
-    return {
-      listSound: [
-        {
-          title: "Mưa",
-          videoID: "q76bMs-NwRk",
-        },
-        {
-          title: "Sông, suối",
-          videoID: "IvjMgVS6kng",
-        },
-        {
-          title: "Thành phố",
-          videoID: "Vg1mpD1BICI",
-        },
-        {
-          title: "Tiếng ồn trắng",
-          videoID: "yLOM8R6lbzg",
-        },
-        {
-          title: "Lửa",
-          videoID: "CIj-ZDSjZ2E",
-        },
-        {
-          title: "Sóng biển",
-          videoID: "bn9F19Hi1Lk",
-        },
-      ],
-      iframeSound: null,
-      listDropSound: null,
-      isAllSoundReady: false,
-      isOpenDrop: false,
-    };
-  },
-  mounted() {
-    this.iframeSound = document.getElementById("iframeSound");
-
-    this.listSound.forEach((e) => {
-      this.initPlayer(e);
-    });
-    this.isAllSoundReady = true;
-  },
+  data: () => ({
+    isOpen: false,
+    sounds: [
+      ['Mưa', 'q76bMs-NwRk', 'ri-rainy-line'], ['Sông, suối', 'IvjMgVS6kng', 'ri-water-flash-line'], ['Thành phố', 'Vg1mpD1BICI', 'ri-building-line'],
+      ['Tiếng ồn trắng', 'yLOM8R6lbzg', 'ri-sound-module-line'], ['Lửa', 'CIj-ZDSjZ2E', 'ri-fire-line'], ['Sóng biển', 'bn9F19Hi1Lk', 'ri-sailboat-line']
+    ].map(([title, videoId, icon]) => ({ title, videoId, icon, volume: 0, oldVolume: 50, error: '' }))
+  }),
+  created() { this.controllers = new Map(); },
+  beforeUnmount() { for (const controller of this.controllers.values()) controller.destroy(); this.controllers.clear(); },
   methods: {
-    initPlayer(sound) {
-      let divPlayer = document.createElement("div");
-      this.iframeSound.appendChild(divPlayer);
-
-      let player = YouTubePlayer(divPlayer, {
-        videoId: sound.videoID,
-        width: "100%",
-        height: "100%",
-        playerVars: {},
-      });
-      
-      sound.player = player;
-      sound.player.on("stateChange", (event) => {
-        if (event.data === 0) {
-        player.seekTo(0); 
-        player.playVideo(); 
+    changeVolume(sound, value) {
+      sound.volume = Math.max(0, Math.min(100, Number(value) || 0));
+      let controller = this.controllers.get(sound.videoId);
+      if (!controller && sound.volume > 0) {
+        sound.error = '';
+        const root = document.createElement('div');
+        this.$refs.players.appendChild(root);
+        controller = new PlayerController({
+          create: YouTubePlayer, root,
+          shouldPlay: () => sound.volume > 0,
+          onEnd: () => {
+            if (sound.volume > 0) controller.seek(0).then(() => controller.player && controller.player.playVideo()).catch(() => {});
+          },
+          onError: message => {
+            sound.error = message;
+            sound.volume = 0;
+            controller.destroy();
+            root.remove();
+            this.controllers.delete(sound.videoId);
+          }
+        });
+        this.controllers.set(sound.videoId, controller);
+        controller.load(sound.videoId, sound.volume);
       }
-      })
-      sound.player.on("ready", () => {
-        sound.player.playVideo();
-        sound.player.setVolume(0);
-        sound.volume = 0;
-      });
-    },
-    changeVolume(event, sound) {
-      let value = event.target.value;
-      sound.volume = value;
-      sound.player.setVolume(value);
-    },
-    muteVolume(sound) {
-      if(sound.volume == 0) {
-        sound.volume = 50
-        sound.player.setVolume(sound.volume);
-      }else {
-        sound.volume = 0
-        sound.player.setVolume(sound.volume);
+      if (controller) {
+        controller.setVolume(sound.volume).catch(() => { sound.error = 'Không thể đổi âm lượng.'; });
+        if (controller.ready) {
+          const action = sound.volume > 0 ? controller.player.playVideo() : controller.player.pauseVideo();
+          action.catch(() => { sound.error = 'Không thể điều khiển âm thanh.'; });
+        }
       }
+    },
+    toggle(sound) {
+      if (sound.volume > 0) { sound.oldVolume = sound.volume; this.changeVolume(sound, 0); }
+      else this.changeVolume(sound, sound.oldVolume);
     }
-  },
+  }
 };
 </script>
-
-<style lang="scss" scoped></style>

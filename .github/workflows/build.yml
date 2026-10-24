@@ -2,103 +2,66 @@ name: Build Pofi App
 
 on:
   push:
-    tags:
-      - 'v*'
-    branches:
-      - main
+    tags: ['v*']
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  build-mac:
-    runs-on: macos-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            command: npm run build:electron -- --win nsis zip --x64 --publish never
+            artifact: pofi-windows
+          - os: macos-latest
+            command: npm run build:electron -- --mac zip --x64 --publish never
+            artifact: pofi-macos
+    runs-on: ${{ matrix.os }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build Vue app
-        run: npm run build
-
-      - name: Generate icons
-        run: npm run generate-icons
-
-      - name: Package for macOS
-        run: npm run package
-
-      - name: Zip macOS app
-        run: |
-          cd package
-          zip -r Pofi-mac.zip Pofi-darwin-x64
-
-      - name: Upload macOS artifact
-        uses: actions/upload-artifact@v3
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - name: Build and package
+        run: ${{ matrix.command }}
+      - run: npm run test:electron
+      - uses: actions/upload-artifact@v7
         with:
-          name: pofi-macos
-          path: package/Pofi-mac.zip
-
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build Vue app
-        run: npm run build
-
-      - name: Generate icons
-        run: npm run generate-icons
-
-      - name: Package for Windows
-        run: |
-          npm run package-win
-
-      - name: Zip Windows app
-        run: |
-          cd package
-          powershell Compress-Archive -Path Pofi-win32-x64 -DestinationPath Pofi-win.zip
-
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: pofi-windows
-          path: package/Pofi-win.zip
+          name: ${{ matrix.artifact }}
+          if-no-files-found: error
+          path: |
+            dist_electron/*.exe
+            dist_electron/*.zip
 
   create-release:
-    needs: [build-mac, build-windows]
+    needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v3
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+      - uses: softprops/action-gh-release@v3
         with:
           files: |
-            pofi-macos/Pofi-mac.zip
-            pofi-windows/Pofi-win.zip
+            artifacts/**/*.exe
+            artifacts/**/*.zip
+          fail_on_unmatched_files: true
           draft: false
           prerelease: false
           generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,73 @@
+/*
+* Remix Icon v3.3.0
+* https://remixicon.com
+* https://github.com/Remix-Design/RemixIcon
+*
+* Copyright RemixIcon.com
+* Released under the Apache License Version 2.0
+*
+* Date: 2023-05-17
+*/
+@font-face {
+  font-family: "remixicon";
+  src: url("~remixicon/fonts/remixicon.woff2") format("woff2");
+  font-display: swap;
+}
+
+[class^="ri-"], [class*=" ri-"] {
+  font-family: 'remixicon' !important;
+  font-style: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+.ri-add-line:before { content: "\ea13"; }
+.ri-arrow-down-s-line:before { content: "\ea4e"; }
+.ri-arrow-up-s-line:before { content: "\ea78"; }
+.ri-blur-off-line:before { content: "\eace"; }
+.ri-building-line:before { content: "\eb0f"; }
+.ri-check-line:before { content: "\eb7b"; }
+.ri-checkbox-blank-circle-line:before { content: "\eb7d"; }
+.ri-checkbox-blank-line:before { content: "\eb7f"; }
+.ri-checkbox-circle-fill:before { content: "\eb80"; }
+.ri-close-line:before { content: "\eb99"; }
+.ri-cup-line:before { content: "\ec06"; }
+.ri-delete-bin-line:before { content: "\ec2a"; }
+.ri-drop-line:before { content: "\ec6a"; }
+.ri-error-warning-line:before { content: "\eca1"; }
+.ri-file-copy-line:before { content: "\ecd5"; }
+.ri-fire-line:before { content: "\ed33"; }
+.ri-focus-3-line:before { content: "\ed4c"; }
+.ri-forward-10-fill:before { content: "\f32a"; }
+.ri-fullscreen-line:before { content: "\ed9c"; }
+.ri-heart-fill:before { content: "\ee0e"; }
+.ri-heart-line:before { content: "\ee0f"; }
+.ri-history-line:before { content: "\ee17"; }
+.ri-image-line:before { content: "\ee4b"; }
+.ri-layout-bottom-line:before { content: "\ee8b"; }
+.ri-leaf-line:before { content: "\eea3"; }
+.ri-loader-4-line:before { content: "\eec6"; }
+.ri-menu-line:before { content: "\ef3e"; }
+.ri-moon-line:before { content: "\ef75"; }
+.ri-palette-line:before { content: "\efc5"; }
+.ri-pause-fill:before { content: "\efd7"; }
+.ri-picture-in-picture-line:before { content: "\eff4"; }
+.ri-play-fill:before { content: "\f00a"; }
+.ri-play-line:before { content: "\f00b"; }
+.ri-pushpin-line:before { content: "\f039"; }
+.ri-rainy-line:before { content: "\f056"; }
+.ri-replay-10-fill:before { content: "\f351"; }
+.ri-restart-line:before { content: "\f080"; }
+.ri-sailboat-line:before { content: "\f0ad"; }
+.ri-search-line:before { content: "\f0d1"; }
+.ri-settings-3-line:before { content: "\f0e6"; }
+.ri-skip-forward-line:before { content: "\f144"; }
+.ri-sound-module-line:before { content: "\f162"; }
+.ri-subtract-line:before { content: "\f1af"; }
+.ri-task-line:before { content: "\f1e8"; }
+.ri-time-line:before { content: "\f20f"; }
+.ri-volume-mute-line:before { content: "\f29e"; }
+.ri-volume-up-line:before { content: "\f2a2"; }
+.ri-water-flash-line:before { content: "\f2b0"; }
+.ri-youtube-line:before { content: "\f2d5"; }

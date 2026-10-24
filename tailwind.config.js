@@ -1,17 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  purge: ['./index.html', './src/**/*.{vue,js,ts,jsx,tsx}'],
-  darkMode: false, // or 'media' or 'class'
-  theme: {
-    extend: {},
-  },
-  variants: {
-    extend: {},
-  },
-  content: [
-    "./node_modules/flowbite/**/*.js"
-  ],
-  plugins: [
-    require('flowbite/plugin')
-  ],
-}
+  content: ['./public/index.html', './src/**/*.{vue,js}', './node_modules/flowbite/**/*.js'],
+  darkMode: 'media',
+  theme: { extend: {} },
+  plugins: [require('flowbite/plugin')]
+};

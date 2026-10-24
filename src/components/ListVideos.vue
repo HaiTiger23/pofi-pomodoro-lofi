@@ -1,49 +1,6 @@
 <template>
-  <div class="w-full bg-white h-[250px] bg-opacity-50 overflow-auto">
-    <div
-      class="flex max-h-[100px] border-b-[1px] p-1 cursor-pointer"
-      v-for="item in list"
-      @click="$emit('getVideoEvent',item)"
-      :key="item.id.videoId"
-    >
-      <img
-        :src="item.snippet.thumbnails.high.url"
-        class="w-[40%] border"
-        alt=""
-      />
-      <div>
-        <p class="name">{{ item.snippet.title }}</p>
-        <p class="text-slate-600">{{ item.snippet.channelTitle }}</p>
-      </div>
-    </div>
-  </div>
+  <div class="result-list"><button class="result-row" v-for="item in list" :key="item.id.videoId" @click="$emit('getVideoEvent', item)"><span class="result-thumbnail"><img :src="item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url" alt="" loading="lazy" /><time v-if="item.duration">{{ item.duration }}</time></span><span class="result-copy"><strong>{{ item.snippet.title }}</strong><small>{{ item.snippet.channelTitle }}</small></span><i class="ri-play-line" aria-hidden="true"></i></button></div>
 </template>
-
 <script>
-
-export default {
-    name: "ListVideo",
-    props: ['list'],
-    setup() {
-        
-       
-        return {
-           
-        }
-    },
-    mounted() {
-
-    },
-
-}
+export default { props: { list: { type: Array, default: () => [] } }, emits: ['getVideoEvent'] };
 </script>
-
-<style lang="css" scoped>
-.name {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2; /* number of lines to show */
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-</style>

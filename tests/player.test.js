@@ -1,0 +1,87 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { PlayerController } = require('../src/services/youtube-player');
+function fixture() {
+  const players = [], intervals = new Map(), timeouts = new Map(), updates = [], ready = [], errors = [];
+  let next = 0;
+  const root = { ownerDocument: { createElement: () => ({}) }, replaceChildren() {}, appendChild() {} };
+  const controller = new PlayerController({
+    root, schedule: callback => { intervals.set(++next, callback); return next; }, cancel: id => intervals.delete(id),
+    later: callback => { timeouts.set(++next, callback); return next; }, cancelLater: id => timeouts.delete(id),
+    onUpdate: state => updates.push(state), onReady: value => ready.push(value), onError: error => errors.push(error),
+    create: () => {
+      const listeners = new Map();
+      const player = {
+        destroyed: false, plays: 0, volume: 0,
+        on: (type, callback) => { const listener = { type, callback }; listeners.set(type, callback); return listener; },
+        off: listener => listeners.delete(listener.type),
+        emit: (type, value) => listeners.get(type)?.(value),
+        getIframe: async () => ({ title: 'Lofi' }), getDuration: async () => 120, getCurrentTime: async () => 12,
+        setVolume: async value => { player.volume = value; },
+        playVideo: async () => { player.plays++; }, pauseVideo: async () => {}, seekTo: async () => {},
+        destroy: async () => { player.destroyed = true; }
+      };
+      players.push(player);
+      return player;
+    }
+  });
+  return { controller, players, intervals, timeouts, updates, ready, errors };
+}
+test('switching songs destroys old player and ignores late metadata and polls', async () => {
+  const f = fixture();
+  f.controller.load('DnewVhYNt-I');
+  const first = f.players[0];
+  const lateReady = first.emit('ready');
+  f.controller.load('ukHK1GVyr0I');
+  await lateReady;
+  assert.equal(first.destroyed, true);
+  assert.equal(first.plays, 0);
+  assert.equal(f.ready.length, 0);
+  await f.players[1].emit('ready');
+  f.players[1].emit('stateChange', { data: 1 });
+  f.players[1].emit('stateChange', { data: 1 });
+  assert.equal(f.intervals.size, 1);
+  assert.equal(f.timeouts.size, 0);
+  await [...f.intervals.values()][0]();
+  assert.equal(f.updates.at(-1).currentTime, 12);
+  f.controller.load('DnewVhYNt-I');
+  assert.equal(f.intervals.size, 0);
+  f.controller.destroy();
+  assert.equal(f.timeouts.size, 0);
+});
+test('pause stops polling; unmount destroys player and callbacks', async () => {
+  const f = fixture();
+  f.controller.load('DnewVhYNt-I');
+  await f.players[0].emit('ready');
+  f.players[0].emit('stateChange', { data: 1 });
+  f.players[0].emit('stateChange', { data: 2 });
+  assert.equal(f.intervals.size, 0);
+  f.controller.destroy();
+  assert.equal(f.players[0].destroyed, true);
+  assert.equal(f.timeouts.size, 0);
+  f.players[0].emit('stateChange', { data: 1 });
+  assert.equal(f.intervals.size, 0);
+});
+test('unavailable videos stop loading and can be retried', () => {
+  const f = fixture();
+  f.controller.load('DnewVhYNt-I');
+  [...f.timeouts.values()][0]();
+  assert.equal(f.errors.length, 1);
+  assert.equal(f.controller.ready, false);
+  assert.equal(f.players[0].destroyed, true);
+  f.controller.load('ukHK1GVyr0I');
+  assert.equal(f.players.length, 2);
+  f.controller.destroy();
+});
+test('ambient players muted before ready do not autoplay', async () => {
+  const f = fixture();
+  let enabled = true;
+  f.controller.shouldPlay = () => enabled;
+  f.controller.load('DnewVhYNt-I', 50);
+  enabled = false;
+  await f.controller.setVolume(0);
+  await f.players[0].emit('ready');
+  assert.equal(f.players[0].volume, 0);
+  assert.equal(f.players[0].plays, 0);
+  f.controller.destroy();
+});

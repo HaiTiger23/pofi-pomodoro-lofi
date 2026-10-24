@@ -1,327 +1,173 @@
-const { app, BrowserWindow, ipcMain,shell } = require("electron");
-const sound = require("sound-play");
-const { Notification } = require('electron');
-const fs = require('fs');
+const { app, BrowserWindow, ipcMain, shell, Notification, dialog, powerMonitor, screen } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
+const sound = require('sound-play');
+const { PomodoroTimer } = require('./electron/timer');
+const { SettingsStorage } = require('./electron/storage');
+const { YouTubeSearch, registerSearchRoute } = require('./electron/youtube-search');
+const { WindowMode } = require('./electron/window-mode');
+const youtubeSearch = new YouTubeSearch();
 
-// Tạo server Express
-const server = express();
-let PORT = 8282; // Cổng mặc định, nhưng sẽ tự động tìm cổng trống nếu cổng này đã được sử dụng
-let serverRunning = false;
-const distPath = path.join(__dirname, 'dist');
+let mainWindow;
+let httpServer;
+let settings;
+let timer;
+let appOrigin;
+let windowMode;
+const devUrl = !app.isPackaged && process.env.POFI_DEV_URL;
 
-// Hàm tìm cổng trống
-function findAvailablePort(startPort) {
+function notify(title, body, type = 'info') {
+  if (Notification.isSupported()) new Notification({ title, body, silent: true }).show();
+  const filename = type === 'finish' ? 'success-fanfare-trumpets-6185.mp3' : 'simple-notification-152054.mp3';
+  const base = app.isPackaged ? process.resourcesPath : __dirname;
+  const audio = path.join(base, 'sounds', filename);
+  if (fs.existsSync(audio)) sound.play(audio, 1).catch(() => console.warn('Không thể phát âm báo.'));
+}
+function publishTimer(state) {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.webContents.isDestroyed()) window.webContents.send('pomodoro-state', state);
+  }
+  if (process.platform === 'darwin') {
+    app.dock.setBadge(state.status === 'ready' ? '' : `${state.isBreak ? '☕' : '⏱'} ${Math.ceil((state.minutes * 60 + state.seconds) / 60)}m`);
+  }
+}
+function windowState() {
+  return { pinned: mainWindow.isAlwaysOnTop(), maximized: mainWindow.isMaximized(), dockMode: Boolean(windowMode?.dockMode) };
+}
+function registerIPC() {
+  const handle = (channel, callback) => ipcMain.handle(channel, (event, ...args) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) throw new Error('Untrusted renderer');
+    return callback(...args);
+  });
+  handle('storage-initialize', legacy => settings.initialize(legacy));
+  handle('storage-set', (key, value) => settings.set(key, value));
+  handle('search-youtube', async (query, cursor) => {
+    try { return await youtubeSearch.searchPage(query, cursor); }
+    catch (error) { return { error: error.message }; }
+  });
+  handle('toggle-pin-window', shouldPin => {
+    mainWindow.setAlwaysOnTop(Boolean(shouldPin));
+    return mainWindow.isAlwaysOnTop();
+  });
+  handle('get-window-state', windowState);
+  handle('set-dock-mode', async enabled => {
+    await windowMode.setDockMode(enabled);
+    const state = windowState();
+    mainWindow.webContents.send('window-state', state);
+    return state;
+  });
+  handle('minimize-window', () => { mainWindow.minimize(); return true; });
+  handle('toggle-maximize-window', async () => {
+    if (windowMode.dockMode) await windowMode.setDockMode(false);
+    if (mainWindow.isMaximized()) mainWindow.unmaximize();
+    else mainWindow.maximize();
+    return windowState();
+  });
+  handle('close-window', () => {
+    const window = mainWindow;
+    setImmediate(() => { if (!window.isDestroyed()) window.close(); });
+    return true;
+  });
+  handle('configure-pomodoro-timer', (work, rest) => timer.configure(work, rest));
+  handle('start-pomodoro-timer', (work, rest) => timer.start(work, rest));
+  handle('stop-pomodoro-timer', () => timer.stop());
+  handle('pause-pomodoro-timer', () => timer.pause());
+  handle('resume-pomodoro-timer', () => timer.resume());
+  handle('get-pomodoro-timer-status', () => timer.tick());
+  handle('show-notification', message => {
+    if (!message || typeof message.title !== 'string') return false;
+    notify(message.title.slice(0, 200), String(message.body || message.content || '').slice(0, 1000), message.type);
+    return true;
+  });
+}
+function startServer(port = 8282) {
+  const server = express();
+  registerSearchRoute(server, youtubeSearch);
+  const dist = path.join(__dirname, 'dist');
+  if (!fs.existsSync(path.join(dist, 'index.html'))) throw new Error('Chưa có giao diện. Hãy chạy npm run build:vue.');
+  server.use(express.static(dist));
   return new Promise((resolve, reject) => {
-    const testServer = require('net').createServer();
-    testServer.once('error', err => {
-      if (err.code === 'EADDRINUSE') {
-        // Cổng đã được sử dụng, thử cổng tiếp theo
-        resolve(findAvailablePort(startPort + 1));
-      } else {
-        reject(err);
-      }
-    });
-    testServer.once('listening', () => {
-      // Tìm thấy cổng trống
-      const port = testServer.address().port;
-      testServer.close(() => {
-        resolve(port);
+    const listen = currentPort => {
+      const candidate = server.listen(currentPort, '127.0.0.1');
+      candidate.once('error', error => {
+        if (error.code === 'EADDRINUSE' && currentPort < port + 100) listen(currentPort + 1);
+        else reject(error);
       });
-    });
-    testServer.listen(startPort);
-  });
-}
-
-// Phục vụ các file tĩnh từ thư mục dist
-async function startServer() {
-  if (serverRunning) return true;
-
-  // Kiểm tra xem thư mục dist có tồn tại không
-  if (!fs.existsSync(distPath)) {
-    console.error('Folder dist does not exist. Please run npm run build before.');
-    return false;
-  }
-
-  try {
-    // Tìm cổng trống
-    PORT = await findAvailablePort(PORT);
-    console.log(`Found available port: ${PORT}`);
-  } catch (err) {
-    console.error('Error finding available port:', err);
-    return false;
-  }
-  // Cấu hình Express để phục vụ các file tĩnh
-  server.use(express.static(distPath));
-
-  // Định tuyến cho các request khác về index.html (cho Vue router)
-  // Sử dụng đường dẫn cụ thể thay vì dùng '*' để tránh lỗi path-to-regexp
-  server.get('/', (req, res) => {
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
-
-  // Thêm các đường dẫn cụ thể khác nếu cần
-  server.get('/index.html', (req, res) => {
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
-
-  // Khởi động server
-  return new Promise((resolve) => {
-    server.listen(PORT, () => {
-      console.log(`Server running at http://localhost:${PORT}`);
-      serverRunning = true;
-      resolve(true);
-    }).on('error', (err) => {
-      console.error('Error starting server:', err);
-      resolve(false);
-    });
-  });
-}
-
-// Kiểm tra xem thư mục dist có tồn tại không
-const checkDistFolder = () => {
-  const indexPath = path.join(distPath, 'index.html');
-
-  if (!fs.existsSync(distPath)) {
-    console.error('Folder dist does not exist. Please run npm run build before.');
-    return false;
-  }
-
-  if (!fs.existsSync(indexPath)) {
-    console.error('File index.html does not exist in the dist folder. Please run npm run build before.');
-    return false;
-  }
-
-  return true;
-}
-
-const createWindow = async () => {
-  // Kiểm tra thư mục dist và khởi động server web
-  if (!checkDistFolder()) {
-    app.quit();
-    return;
-  }
-
-  // Khởi động server web
-  const serverStarted = await startServer();
-  if (!serverStarted) {
-    app.quit();
-    return;
-  }
-  const window = new BrowserWindow({
-    width: 1000,
-    height: 600,
-    maximizable: true,
-    autoHideMenuBar: true,
-    devTools: false ,
-    hasShadow: false,
-    show: true,
-    // Sử dụng file .icns đã được tạo bởi electron-icon-builder
-    icon: path.join(__dirname, 'icons/icons/mac/icon.icns'),
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js')
-    }
-  });
-
-  window.setMinimumSize(450, 400);
-  // Sử dụng server web thay vì file local
-  window.loadURL(`http://localhost:${PORT}/`);
-
-  // Ngăn Electron mở link trong app
-  window.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url); // Mở bằng trình duyệt ngoài
-    return { action: 'deny' }; // Không mở trong Electron
-  });
-
-  // Chặn click trực tiếp trên link
-  window.webContents.on('will-navigate', (event, url) => {
-    if (url !== window.webContents.getURL()) {
-      event.preventDefault();
-      shell.openExternal(url);
-    }
-  });
-
-  // Thêm phương thức để bật/tắt chế độ ghim cửa sổ
-  ipcMain.handle('toggle-pin-window', (event, shouldPin) => {
-    console.log('Toggle pin window:', shouldPin);
-    try {
-      if (!window.isDestroyed()) {
-        window.setAlwaysOnTop(shouldPin, "screen-saver");
-      }
-      return shouldPin;
-    } catch (error) {
-      console.error('Error updating pin window state:', error);
-      return false;
-    }
-  });
-
-  // Thêm phương thức để cập nhật badge trên dock macOS
-  ipcMain.handle('update-dock-badge', (event, text, isBreak) => {
-    if (process.platform === 'darwin') {
-      // Thêm ký tự để phân biệt giữa làm việc và nghỉ ngơi
-      if (isBreak) {
-        // Thêm biểu tượng cho thời gian nghỉ
-        app.dock.setBadge('☕ ' + text); // Biểu tượng tách cà phê
-      } else {
-        // Thêm biểu tượng cho thời gian làm việc
-        app.dock.setBadge('⏱ ' + text); // Biểu tượng đồng hồ
-      }
-    }
-    return true;
-  });
-
-  // Thêm phương thức để bắt đầu bộ đếm thời gian trong main process
-  ipcMain.handle('start-pomodoro-timer', (event, minutes, seconds, isBreak) => {
-    global.pomodoroTimer = {
-      minutes: minutes,
-      seconds: seconds,
-      isBreak: isBreak,
-      interval: null,
-      isRunning: false
+      candidate.once('listening', () => {
+        httpServer = candidate;
+        resolve(`http://localhost:${candidate.address().port}`);
+      });
     };
-
-    // Xóa bộ đếm thời gian cũ nếu có
-    if (global.pomodoroTimer.interval) {
-      clearInterval(global.pomodoroTimer.interval);
-    }
-
-    // Cập nhật badge ban đầu
-    if (process.platform === 'darwin') {
-      const timeText = (global.pomodoroTimer.minutes < 10 ? '0' : '') + global.pomodoroTimer.minutes + 'm';
-      if (isBreak) {
-        app.dock.setBadge('☕ ' + timeText);
-      } else {
-        app.dock.setBadge('⏱ ' + timeText);
-      }
-    }
-
-    // Bắt đầu bộ đếm thời gian
-    global.pomodoroTimer.isRunning = true;
-    global.pomodoroTimer.interval = setInterval(() => {
-      if (global.pomodoroTimer.seconds === 0) {
-        if (global.pomodoroTimer.minutes === 0) {
-          // Hết thời gian
-          clearInterval(global.pomodoroTimer.interval);
-          global.pomodoroTimer.isRunning = false;
-          if (process.platform === 'darwin') {
-            app.dock.setBadge('');
-          }
-          return;
-        }
-        global.pomodoroTimer.minutes--;
-        global.pomodoroTimer.seconds = 59;
-      } else {
-        global.pomodoroTimer.seconds--;
-      }
-
-      // Cập nhật badge mỗi phút hoặc khi giây = 0
-      if (process.platform === 'darwin' && (global.pomodoroTimer.seconds === 0 || global.pomodoroTimer.seconds === 59)) {
-        const timeText = (global.pomodoroTimer.minutes < 10 ? '0' : '') + global.pomodoroTimer.minutes + 'm';
-        if (global.pomodoroTimer.isBreak) {
-          app.dock.setBadge('☕ ' + timeText);
-        } else {
-          app.dock.setBadge('⏱ ' + timeText);
-        }
-      }
-    }, 1000);
-
-    return true;
+    listen(port);
   });
-
-  // Thêm phương thức để dừng bộ đếm thời gian
-  ipcMain.handle('stop-pomodoro-timer', () => {
-    if (global.pomodoroTimer && global.pomodoroTimer.interval) {
-      clearInterval(global.pomodoroTimer.interval);
-      global.pomodoroTimer.isRunning = false;
-      if (process.platform === 'darwin') {
-        app.dock.setBadge('');
-      }
+}
+function openExternal(url) {
+  try {
+    if (['https:', 'http:'].includes(new URL(url).protocol)) shell.openExternal(url).catch(() => {});
+  } catch { /* Ignore malformed external links. */ }
+}
+async function createWindow() {
+  const window = new BrowserWindow({
+    width: 460, height: 620, minWidth: 320, minHeight: 340,
+    show: false, skipTaskbar: false, title: 'Pofi · Góc tập trung',
+    frame: false, autoHideMenuBar: true, hasShadow: false, backgroundColor: '#20261f',
+    icon: path.join(__dirname, 'pofi_logo.png'),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true, nodeIntegration: false, sandbox: true,
+      devTools: Boolean(devUrl)
     }
-    return true;
   });
-
-  // Thêm phương thức để tạm dừng bộ đếm thời gian
-  ipcMain.handle('pause-pomodoro-timer', () => {
-    if (global.pomodoroTimer && global.pomodoroTimer.interval) {
-      clearInterval(global.pomodoroTimer.interval);
-      global.pomodoroTimer.isRunning = false;
-    }
-    return true;
+  mainWindow = window;
+  windowMode = new WindowMode(window, { workArea: bounds => screen.getDisplayMatching(bounds).workArea });
+  if (process.platform !== 'darwin') window.removeMenu();
+  for (const event of ['maximize', 'unmaximize', 'always-on-top-changed']) window.on(event, () => {
+    if (!window.webContents.isDestroyed()) window.webContents.send('window-state', windowState());
   });
-
-  // Thêm phương thức để tiếp tục bộ đếm thời gian
-  ipcMain.handle('resume-pomodoro-timer', () => {
-    if (global.pomodoroTimer && !global.pomodoroTimer.isRunning) {
-      global.pomodoroTimer.isRunning = true;
-      global.pomodoroTimer.interval = setInterval(() => {
-        if (global.pomodoroTimer.seconds === 0) {
-          if (global.pomodoroTimer.minutes === 0) {
-            // Hết thời gian
-            clearInterval(global.pomodoroTimer.interval);
-            global.pomodoroTimer.isRunning = false;
-            if (process.platform === 'darwin') {
-              app.dock.setBadge('');
-            }
-            return;
-          }
-          global.pomodoroTimer.minutes--;
-          global.pomodoroTimer.seconds = 59;
-        } else {
-          global.pomodoroTimer.seconds--;
-        }
-
-        // Cập nhật badge mỗi phút hoặc khi giây = 0
-        if (process.platform === 'darwin' && (global.pomodoroTimer.seconds === 0 || global.pomodoroTimer.seconds === 59)) {
-          const timeText = (global.pomodoroTimer.minutes < 10 ? '0' : '') + global.pomodoroTimer.minutes + 'm';
-          if (global.pomodoroTimer.isBreak) {
-            app.dock.setBadge('☕ ' + timeText);
-          } else {
-            app.dock.setBadge('⏱ ' + timeText);
-          }
-        }
-      }, 1000);
-    }
-    return true;
+  window.once('ready-to-show', () => revealWindow(window));
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => { openExternal(url); return { action: 'deny' }; });
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (new URL(url).origin !== appOrigin) { event.preventDefault(); openExternal(url); }
   });
-
-  // Thêm phương thức để lấy trạng thái hiện tại của bộ đếm thời gian
-  ipcMain.handle('get-pomodoro-timer-status', () => {
-    if (global.pomodoroTimer) {
-      return {
-        minutes: global.pomodoroTimer.minutes,
-        seconds: global.pomodoroTimer.seconds,
-        isBreak: global.pomodoroTimer.isBreak,
-        isRunning: global.pomodoroTimer.isRunning
-      };
-    }
-    return null;
+  mainWindow.on('closed', () => { windowMode.dispose(); windowMode = null; mainWindow = null; });
+  await mainWindow.loadURL(appOrigin);
+}
+function revealWindow(window) {
+  if (!window || window.isDestroyed()) return;
+  if (window.isMinimized()) window.restore();
+  window.setSkipTaskbar(false);
+  window.show();
+  window.focus();
+}
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    revealWindow(mainWindow);
   });
-  // window.webContents.openDevTools();
-  // Lấy vị trí hiện tại
-};
-app.on("window-all-closed", () => {
-  if (process.platform != "darwin") {
-    app.quit();
-  }
-});
-app.whenReady().then(() => {
-  createWindow();
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
-  ipcMain.on('notiFromRender', (event, message) => {
-    new Notification({
-      title: message.title,
-      body: message.body,
-      silent: true
-    }).show()
-    if (message.type == "finish") {
-      sound.play(path.join(__dirname, './src/assets/sound/notification/success-fanfare-trumpets-6185.mp3'), 1)
-    } else {
-      sound.play(path.join(__dirname, './src/assets/sound/notification/simple-notification-152054.mp3'), 1)
-    }
-
-  });
-});
+  app.whenReady().then(async () => {
+    if (process.platform === 'win32') app.setAppUserModelId('com.pofi-hai-dev.id');
+    if (process.platform === 'darwin') app.dock.setIcon(path.join(__dirname, 'pofi_logo.png'));
+    settings = new SettingsStorage(path.join(app.getPath('userData'), 'settings.json'));
+    timer = new PomodoroTimer({ onChange: publishTimer, onComplete: phase => notify('Pofi', phase === 'work'
+      ? 'Đã hết thời gian làm việc, hãy nghỉ ngơi'
+      : 'Đã hết thời gian nghỉ, hãy bắt đầu làm việc', phase === 'work' ? 'info' : 'finish') });
+    registerIPC();
+    appOrigin = devUrl ? new URL(devUrl).origin : await startServer();
+    console.log(`Pofi running at ${appOrigin}`);
+    powerMonitor.on('resume', () => timer.tick());
+    await createWindow();
+    app.on('activate', () => {
+      if (!mainWindow) createWindow().catch(reportStartupError);
+      else revealWindow(mainWindow);
+    });
+  }).catch(reportStartupError);
+}
+function reportStartupError(error) {
+  console.error(error);
+  dialog.showErrorBox('Không thể mở Pofi', error.message);
+  app.quit();
+}
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('before-quit', () => { if (timer) timer.dispose(); if (httpServer) httpServer.close(); });
